@@ -1,0 +1,217 @@
+import argparse
+import calendar
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import datetime as dt
+import glob
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import pandas as pd
+import subprocess
+import sys
+import time as time_module
+import utilities as utils
+import warnings
+import xarray as xr
+from netCDF4 import Dataset
+
+# Suppress all warnings like "More than 20 figures have been opened"
+# and "All-NaN slice encountered" in percentile calculations
+def suppress_warnings(): 
+    warnings.filterwarnings("ignore")
+
+# STANDARD/COMMON DIMENSION AND VARIABLE NAMES 
+#################################################################################
+# Dimension names
+time_dim_str = "time"
+period_begin_time_dim_str = "period_begin_time"
+period_end_time_dim_str = "period_end_time"
+months_dim_str = "months"
+seasons_dim_str = "seasons"
+annual_dim_str = "years"
+full_period_dim_str = "full_period"
+common_month_dim_str = "common_month"
+common_season_dim_str = "common_season"
+
+# Variable names
+accum_precip_var_name = "accum_precip"
+
+# Common date string formats
+full_date_format_str = "%Y-%m-%d %H:%M:%S"
+
+# Reference time for Unix time (i.e., a date in expressed in unix seconds will be seconds from this date
+UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
+unix_epoch_str = UNIX_EPOCH.strftime(full_date_format_str) # UNIX_EPOCH in format "1970-01-01 00:00:00"
+seconds_since_unix_epoch_str = f"seconds since {unix_epoch_str}"
+
+# Replay grid cell size in degrees
+replay_grid_cell_size = 0.234375
+default_fss_eval_radius_list_grid_cells = np.array([1, 2, 3, 4, 6, 8, 12, 20, 40, 80])
+
+# DATA DIRECTORY PATHS 
+#################################################################################
+# PSL Linux machines directories 
+USER = "bbasarab"
+home_dir = os.path.join("/home", USER) 
+data_dir = os.path.join("/data", USER)
+data_nc_dir = os.path.join(data_dir, "netcdf")
+plot_output_dir = os.path.join(home_dir, "plots")
+stats_output_dir = os.path.join(home_dir, "stats") 
+
+# Coarse/classic (0.25 degree resolution) UFS Replay on Google Cloud in zarr format
+replay_coarse_gcs_path = "gs://noaa-ufs-gefsv13replay/ufs-hr1/0.25-degree/03h-freq/zarr/fv3.zarr"
+
+# UNIT CONVERSIONS
+#################################################################################
+# Convert degree, minute, second strings with fmt <deg min' sec"> decimal degrees
+def dms_strings_to_decdeg(lat_strings, long_strings, print_data = True):
+    lat_degs = [float(istr.split()[0]) for istr in lat_strings]
+    lat_mins = [float(istr.split()[1].strip("'")) for istr in lat_strings]
+    lat_secs = [float(istr.split()[2].strip('"')) for istr in lat_strings]
+    long_degs = [float(istr.split()[0]) for istr in long_strings]
+    long_mins = [float(istr.split()[1].strip("'")) for istr in long_strings]
+    long_secs = [float(istr.split()[2].strip('"')) for istr in long_strings]
+    
+    num_pts = len(lat_degs)
+
+    lats_dec = [dms2decdeg(lat_degs[i], lat_mins[i], lat_secs[i]) for i in range(num_pts)]
+    longs_dec = [dms2decdeg(long_degs[i], long_mins[i], long_secs[i]) for i in range(num_pts)]
+    
+    if print_data:
+        print("Decimal latitudes:")
+        for ilat in lats_dec:
+            print(ilat) 
+        print("Decimal longitudes:")
+        for ilong in longs_dec:
+            print(ilong)
+ 
+# Degrees, minutes, seconds to decimal degrees
+def dms_to_decdeg(degree, minute, second):
+    if (degree < 0.) and (minute > 0.):
+        minute = -minute
+    if (degree < 0.) and (second > 0.):
+        second = -second
+    decdeg = degree + minute/60. + second/3600.
+    return decdeg
+
+def degC_to_degF(degC):
+    return degC * (9/5.) + 32
+
+def degF_to_degC(degF):
+    return (5/9.) * (degF - 32)
+
+def feet_to_meters(feet):
+    return feet*0.3048
+
+def meters_to_feet(meters):
+    return meters*3.28084
+
+# Knots to meters per second
+def knots_to_mps(knots):
+    return knots*0.5144
+
+# Meters per second to knots
+def mps_to_knots(mps):
+    return mps*1.94384
+
+# Miles per hour to meters per second
+def mph_to_mps(mph):
+    return mph*0.44704
+
+# Meters per second to miles per hour
+def mps_to_mph(mps):
+   return mps*2.23694
+
+# LATITUDE AND LONGITUDE GRID CONVERSIONS
+#################################################################################
+def longitude_to_m180to180(lon_array):
+    lon_array_new = np.copy(lon_array) 
+    lon_array_new[lon_array_new > 180.0] -= 360.0
+    return lon_array_new
+
+def longitude_to_0to360(lon_array):
+    lon_array_new = np.copy(lon_array)
+    lon_array_new[lon_array_new < 0.0] += 360.0
+    return lon_array_new
+
+# TIME AND DATETIME CONVERSIONS 
+#################################################################################
+# Convert to and from unix timestamp; assumes datetime and unix_time are both UTC.
+# NEW functions: explicitly put input and output datetimes in UTC
+# This is necessary if the OS timezone is not UTC (e.g., PSL Linux servers are MT) 
+def datetime2unix(dtime):
+    return calendar.timegm(dtime.utctimetuple())
+
+def unix2datetime(unix_time):
+    return dt.datetime.fromtimestamp(unix_time, dt.UTC)
+
+# NOTE: pd.Timestamp(dt64) also works and returns equivalent output (
+def numpy_dt64_to_pandas_datetime(dt64):
+    return pd.to_datetime(dt64)
+
+def numpy_dt64_to_pandas_datetime_ymd(dt64):
+    pd_ts = pd.Timestamp(dt64)
+    pd_ts_ymd = pd.Timestamp(year = pd_ts.year, month = pd_ts.month, day = pd_ts.day)
+    return pd_ts_ymd
+
+def numpy_dt64_to_string(dt64, dt_format = "%Y%m%d.%H"):
+    pandas_dt = pd.to_datetime(dt64)
+    dt_str = pandas_dt.strftime(dt_format)  
+    return dt_str
+
+# Convert a timedelta object to minutes
+def convert_timedelta_to_minutes(tdelta):
+    duration_minutes = tdelta.days * 1440 + tdelta.seconds/60 + tdelta.microseconds/10**6/60
+    return duration_minutes 
+
+# OLD datetime <--> unix seconds functions: Don't work if your platform's timezone is not UTC (e.g., PSL Linux servers are MT)
+#def datetime2unix(dtime, ret_int = True):
+#    unix_time = time_module.mktime(dtime.timetuple())
+#    if ret_int:
+#        return int(unix_time)
+#    return unix_time
+
+#def unix2datetime(unix_time):
+#    return dt.datetime.utcfromtimestamp(unix_time)
+
+# COMMAND MANAGEMENT
+#################################################################################
+# Communicate command output using subprocess
+def comm_cmd(cmd_str):
+    cmd_out = subprocess.Popen(cmd_str, stdout=subprocess.PIPE, shell = True).communicate()[0].strip()
+    return cmd_out
+
+def run_cmd(cmd, log, testing = False):
+    log.info(f"Executing: {cmd}")
+    ret = 0
+    if not testing:
+        ret = os.system(cmd)
+        log.info(f"Exit status: {ret}")
+    return ret
+
+def run_cmd_print(cmd, testing = False):
+    print(f"Executing: {cmd}")
+    ret = 0
+    if not testing:
+        ret = os.system(cmd)
+        print(f"Exit status: {ret}")
+
+def default_sigpipe():
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+ 
+# Communicate command output using subprocess
+def run_subprocess_cmd(cmd_str):
+    #log.info(cmd_str)
+    #cmd_out = subprocess.Popen(cmd_str, stdout=subprocess.PIPE, shell = True).communicate()[0].strip()
+    #p = subprocess.Popen(cmd_str, shell=True, stdout=subprocess.PIPE)
+    p = subprocess.Popen(cmd_str, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, preexec_fn=default_sigpipe)
+    (cmd_out, cmd_err) = p.communicate()
+    return (cmd_out.strip(), cmd_err)
+
+def run_cmd_no_err_out(cmd_str):
+    cmd_out = subprocess.Popen(cmd_str, stdout=subprocess.PIPE, shell = True).communicate()[0].strip()
+    return cmd_out 
+
+def remove_whitespace(string):
+    return "".join(string.split())

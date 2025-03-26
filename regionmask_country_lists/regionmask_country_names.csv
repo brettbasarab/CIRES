@@ -1,0 +1,242 @@
+0 <regionmask._OneRegion: Zimbabwe (ZW / 0)>
+1 <regionmask._OneRegion: Zambia (ZM / 1)>
+2 <regionmask._OneRegion: Yemen (YE / 2)>
+3 <regionmask._OneRegion: Vietnam (VN / 3)>
+4 <regionmask._OneRegion: Venezuela (VE / 4)>
+5 <regionmask._OneRegion: Vatican (V / 5)>
+6 <regionmask._OneRegion: Vanuatu (VU / 6)>
+7 <regionmask._OneRegion: Uzbekistan (UZ / 7)>
+8 <regionmask._OneRegion: Uruguay (UY / 8)>
+9 <regionmask._OneRegion: Micronesia (FSM / 9)>
+10 <regionmask._OneRegion: Marshall Is. (MH / 10)>
+11 <regionmask._OneRegion: N. Mariana Is. (MP / 11)>
+12 <regionmask._OneRegion: U.S. Virgin Is. (VI / 12)>
+13 <regionmask._OneRegion: Guam (GU / 13)>
+14 <regionmask._OneRegion: American Samoa (AS / 14)>
+15 <regionmask._OneRegion: Puerto Rico (PR / 15)>
+16 <regionmask._OneRegion: United States of America (US / 16)>
+17 <regionmask._OneRegion: S. Geo. and the Is. (GS / 17)>
+18 <regionmask._OneRegion: Br. Indian Ocean Ter. (IO / 18)>
+19 <regionmask._OneRegion: Saint Helena (SH / 19)>
+20 <regionmask._OneRegion: Pitcairn Is. (PN / 20)>
+21 <regionmask._OneRegion: Anguilla (AI / 21)>
+22 <regionmask._OneRegion: Falkland Is. (FK / 22)>
+23 <regionmask._OneRegion: Cayman Is. (KY / 23)>
+24 <regionmask._OneRegion: Bermuda (BM / 24)>
+25 <regionmask._OneRegion: British Virgin Is. (VG / 25)>
+26 <regionmask._OneRegion: Turks and Caicos Is. (TC / 26)>
+27 <regionmask._OneRegion: Montserrat (MS / 27)>
+28 <regionmask._OneRegion: Jersey (JE / 28)>
+29 <regionmask._OneRegion: Guernsey (GG / 29)>
+30 <regionmask._OneRegion: Isle of Man (IM / 30)>
+31 <regionmask._OneRegion: United Kingdom (GB / 31)>
+32 <regionmask._OneRegion: United Arab Emirates (AE / 32)>
+33 <regionmask._OneRegion: Ukraine (UA / 33)>
+34 <regionmask._OneRegion: Uganda (UG / 34)>
+35 <regionmask._OneRegion: Turkmenistan (TM / 35)>
+36 <regionmask._OneRegion: Turkey (TR / 36)>
+37 <regionmask._OneRegion: Tunisia (TN / 37)>
+38 <regionmask._OneRegion: Trinidad and Tobago (TT / 38)>
+39 <regionmask._OneRegion: Tonga (TO / 39)>
+40 <regionmask._OneRegion: Togo (TG / 40)>
+41 <regionmask._OneRegion: Timor-Leste (TL / 41)>
+42 <regionmask._OneRegion: Thailand (TH / 42)>
+43 <regionmask._OneRegion: Tanzania (TZ / 43)>
+44 <regionmask._OneRegion: Tajikistan (TJ / 44)>
+45 <regionmask._OneRegion: Taiwan (TW / 45)>
+46 <regionmask._OneRegion: Syria (SYR / 46)>
+47 <regionmask._OneRegion: Switzerland (CH / 47)>
+48 <regionmask._OneRegion: Sweden (S / 48)>
+49 <regionmask._OneRegion: eSwatini (ES / 49)>
+50 <regionmask._OneRegion: Suriname (SR / 50)>
+51 <regionmask._OneRegion: S. Sudan (SS / 51)>
+52 <regionmask._OneRegion: Sudan (SD / 52)>
+53 <regionmask._OneRegion: Sri Lanka (LK / 53)>
+54 <regionmask._OneRegion: Spain (E / 54)>
+55 <regionmask._OneRegion: South Korea (KR / 55)>
+56 <regionmask._OneRegion: South Africa (ZA / 56)>
+57 <regionmask._OneRegion: Somalia (SO / 57)>
+58 <regionmask._OneRegion: Somaliland (SL / 58)>
+59 <regionmask._OneRegion: Solomon Is. (SB / 59)>
+60 <regionmask._OneRegion: Slovakia (SK / 60)>
+61 <regionmask._OneRegion: Slovenia (SLO / 61)>
+62 <regionmask._OneRegion: Singapore (SG / 62)>
+63 <regionmask._OneRegion: Sierra Leone (SL / 63)>
+64 <regionmask._OneRegion: Seychelles (SC / 64)>
+65 <regionmask._OneRegion: Serbia (RS / 65)>
+66 <regionmask._OneRegion: Senegal (SN / 66)>
+67 <regionmask._OneRegion: Saudi Arabia (SA / 67)>
+68 <regionmask._OneRegion: São Tomé and Principe (ST / 68)>
+69 <regionmask._OneRegion: San Marino (RSM / 69)>
+70 <regionmask._OneRegion: Samoa (WS / 70)>
+71 <regionmask._OneRegion: St. Vin. and Gren. (VC / 71)>
+72 <regionmask._OneRegion: Saint Lucia (LC / 72)>
+73 <regionmask._OneRegion: St. Kitts and Nevis (KN / 73)>
+74 <regionmask._OneRegion: Rwanda (RW / 74)>
+75 <regionmask._OneRegion: Russia (RUS / 75)>
+76 <regionmask._OneRegion: Romania (RO / 76)>
+77 <regionmask._OneRegion: Qatar (QA / 77)>
+78 <regionmask._OneRegion: Portugal (P / 78)>
+79 <regionmask._OneRegion: Poland (PL / 79)>
+80 <regionmask._OneRegion: Philippines (PH / 80)>
+81 <regionmask._OneRegion: Peru (PE / 81)>
+82 <regionmask._OneRegion: Paraguay (PY / 82)>
+83 <regionmask._OneRegion: Papua New Guinea (PG / 83)>
+84 <regionmask._OneRegion: Panama (PA / 84)>
+85 <regionmask._OneRegion: Palau (PW / 85)>
+86 <regionmask._OneRegion: Pakistan (PK / 86)>
+87 <regionmask._OneRegion: Oman (OM / 87)>
+88 <regionmask._OneRegion: Norway (N / 88)>
+89 <regionmask._OneRegion: North Korea (KP / 89)>
+90 <regionmask._OneRegion: Nigeria (NG / 90)>
+91 <regionmask._OneRegion: Niger (NE / 91)>
+92 <regionmask._OneRegion: Nicaragua (NI / 92)>
+93 <regionmask._OneRegion: New Zealand (NZ / 93)>
+94 <regionmask._OneRegion: Niue (NU / 94)>
+95 <regionmask._OneRegion: Cook Is. (CK / 95)>
+96 <regionmask._OneRegion: Netherlands (NL / 96)>
+97 <regionmask._OneRegion: Aruba (AW / 97)>
+98 <regionmask._OneRegion: Curaçao (CW / 98)>
+99 <regionmask._OneRegion: Nepal (NP / 99)>
+100 <regionmask._OneRegion: Nauru (NR / 100)>
+101 <regionmask._OneRegion: Namibia (NA / 101)>
+102 <regionmask._OneRegion: Mozambique (MZ / 102)>
+103 <regionmask._OneRegion: Morocco (MA / 103)>
+104 <regionmask._OneRegion: W. Sahara (WS / 104)>
+105 <regionmask._OneRegion: Montenegro (ME / 105)>
+106 <regionmask._OneRegion: Mongolia (MN / 106)>
+107 <regionmask._OneRegion: Moldova (MD / 107)>
+108 <regionmask._OneRegion: Monaco (MC / 108)>
+109 <regionmask._OneRegion: Mexico (MX / 109)>
+110 <regionmask._OneRegion: Mauritius (MU / 110)>
+111 <regionmask._OneRegion: Mauritania (MR / 111)>
+112 <regionmask._OneRegion: Malta (M / 112)>
+113 <regionmask._OneRegion: Mali (ML / 113)>
+114 <regionmask._OneRegion: Maldives (MV / 114)>
+115 <regionmask._OneRegion: Malaysia (MY / 115)>
+116 <regionmask._OneRegion: Malawi (MW / 116)>
+117 <regionmask._OneRegion: Madagascar (MG / 117)>
+118 <regionmask._OneRegion: North Macedonia (NM / 118)>
+119 <regionmask._OneRegion: Luxembourg (L / 119)>
+120 <regionmask._OneRegion: Lithuania (LT / 120)>
+121 <regionmask._OneRegion: Liechtenstein (FL / 121)>
+122 <regionmask._OneRegion: Libya (LY / 122)>
+123 <regionmask._OneRegion: Liberia (LR / 123)>
+124 <regionmask._OneRegion: Lesotho (LS / 124)>
+125 <regionmask._OneRegion: Lebanon (LB / 125)>
+126 <regionmask._OneRegion: Latvia (LV / 126)>
+127 <regionmask._OneRegion: Laos (LA / 127)>
+128 <regionmask._OneRegion: Kyrgyzstan (KG / 128)>
+129 <regionmask._OneRegion: Kuwait (KW / 129)>
+130 <regionmask._OneRegion: Kosovo (KO / 130)>
+131 <regionmask._OneRegion: Kiribati (KI / 131)>
+132 <regionmask._OneRegion: Kenya (KE / 132)>
+133 <regionmask._OneRegion: Kazakhstan (KZ / 133)>
+134 <regionmask._OneRegion: Jordan (J / 134)>
+135 <regionmask._OneRegion: Japan (J / 135)>
+136 <regionmask._OneRegion: Jamaica (J / 136)>
+137 <regionmask._OneRegion: Italy (I / 137)>
+138 <regionmask._OneRegion: Israel (IS / 138)>
+139 <regionmask._OneRegion: Palestine (PAL / 139)>
+140 <regionmask._OneRegion: Ireland (IRL / 140)>
+141 <regionmask._OneRegion: Iraq (IRQ / 141)>
+142 <regionmask._OneRegion: Iran (IRN / 142)>
+143 <regionmask._OneRegion: Indonesia (INDO / 143)>
+144 <regionmask._OneRegion: India (IND / 144)>
+145 <regionmask._OneRegion: Iceland (IS / 145)>
+146 <regionmask._OneRegion: Hungary (HU / 146)>
+147 <regionmask._OneRegion: Honduras (HN / 147)>
+148 <regionmask._OneRegion: Haiti (HT / 148)>
+149 <regionmask._OneRegion: Guyana (GY / 149)>
+150 <regionmask._OneRegion: Guinea-Bissau (GW / 150)>
+151 <regionmask._OneRegion: Guinea (GN / 151)>
+152 <regionmask._OneRegion: Guatemala (GT / 152)>
+153 <regionmask._OneRegion: Grenada (GD / 153)>
+154 <regionmask._OneRegion: Greece (GR / 154)>
+155 <regionmask._OneRegion: Ghana (GH / 155)>
+156 <regionmask._OneRegion: Germany (D / 156)>
+157 <regionmask._OneRegion: Georgia (GE / 157)>
+158 <regionmask._OneRegion: Gambia (GM / 158)>
+159 <regionmask._OneRegion: Gabon (GA / 159)>
+160 <regionmask._OneRegion: France (F / 160)>
+161 <regionmask._OneRegion: St. Pierre and Miquelon (PM / 161)>
+162 <regionmask._OneRegion: Wallis and Futuna Is. (WF / 162)>
+163 <regionmask._OneRegion: St-Martin (MF / 163)>
+164 <regionmask._OneRegion: St-Barthélemy (BL / 164)>
+165 <regionmask._OneRegion: Fr. Polynesia (PF / 165)>
+166 <regionmask._OneRegion: New Caledonia (NC / 166)>
+167 <regionmask._OneRegion: Fr. S. Antarctic Lands (TF / 167)>
+168 <regionmask._OneRegion: Åland (AI / 168)>
+169 <regionmask._OneRegion: Finland (FIN / 169)>
+170 <regionmask._OneRegion: Fiji (FJ / 170)>
+171 <regionmask._OneRegion: Ethiopia (ET / 171)>
+172 <regionmask._OneRegion: Estonia (EST / 172)>
+173 <regionmask._OneRegion: Eritrea (ER / 173)>
+174 <regionmask._OneRegion: Eq. Guinea (GQ / 174)>
+175 <regionmask._OneRegion: El Salvador (SV / 175)>
+176 <regionmask._OneRegion: Egypt (EG / 176)>
+177 <regionmask._OneRegion: Ecuador (EC / 177)>
+178 <regionmask._OneRegion: Dominican Rep. (DO / 178)>
+179 <regionmask._OneRegion: Dominica (DM / 179)>
+180 <regionmask._OneRegion: Djibouti (DJ / 180)>
+181 <regionmask._OneRegion: Greenland (GL / 181)>
+182 <regionmask._OneRegion: Faeroe Is. (FO / 182)>
+183 <regionmask._OneRegion: Denmark (DK / 183)>
+184 <regionmask._OneRegion: Czechia (CZ / 184)>
+185 <regionmask._OneRegion: N. Cyprus (CN / 185)>
+186 <regionmask._OneRegion: Cyprus (CY / 186)>
+187 <regionmask._OneRegion: Cuba (CU / 187)>
+188 <regionmask._OneRegion: Croatia (HR / 188)>
+189 <regionmask._OneRegion: Côte d'Ivoire (CI / 189)>
+190 <regionmask._OneRegion: Costa Rica (CR / 190)>
+191 <regionmask._OneRegion: Dem. Rep. Congo (DRC / 191)>
+192 <regionmask._OneRegion: Congo (CG / 192)>
+193 <regionmask._OneRegion: Comoros (KM / 193)>
+194 <regionmask._OneRegion: Colombia (CO / 194)>
+195 <regionmask._OneRegion: China (CN / 195)>
+196 <regionmask._OneRegion: Macao (MO / 196)>
+197 <regionmask._OneRegion: Hong Kong (HK / 197)>
+198 <regionmask._OneRegion: Chile (CL / 198)>
+199 <regionmask._OneRegion: Chad (TD / 199)>
+200 <regionmask._OneRegion: Central African Rep. (CF / 200)>
+201 <regionmask._OneRegion: Cabo Verde (CV / 201)>
+202 <regionmask._OneRegion: Canada (CA / 202)>
+203 <regionmask._OneRegion: Cameroon (CM / 203)>
+204 <regionmask._OneRegion: Cambodia (KH / 204)>
+205 <regionmask._OneRegion: Myanmar (MM / 205)>
+206 <regionmask._OneRegion: Burundi (BI / 206)>
+207 <regionmask._OneRegion: Burkina Faso (BF / 207)>
+208 <regionmask._OneRegion: Bulgaria (BG / 208)>
+209 <regionmask._OneRegion: Brunei (BN / 209)>
+210 <regionmask._OneRegion: Brazil (BR / 210)>
+211 <regionmask._OneRegion: Botswana (BW / 211)>
+212 <regionmask._OneRegion: Bosnia and Herz. (BiH / 212)>
+213 <regionmask._OneRegion: Bolivia (BO / 213)>
+214 <regionmask._OneRegion: Bhutan (BT / 214)>
+215 <regionmask._OneRegion: Benin (BJ / 215)>
+216 <regionmask._OneRegion: Belize (BZ / 216)>
+217 <regionmask._OneRegion: Belgium (B / 217)>
+218 <regionmask._OneRegion: Belarus (BY / 218)>
+219 <regionmask._OneRegion: Barbados (BB / 219)>
+220 <regionmask._OneRegion: Bangladesh (BD / 220)>
+221 <regionmask._OneRegion: Bahrain (BH / 221)>
+222 <regionmask._OneRegion: Bahamas (BS / 222)>
+223 <regionmask._OneRegion: Azerbaijan (AZ / 223)>
+224 <regionmask._OneRegion: Austria (A / 224)>
+225 <regionmask._OneRegion: Australia (AU / 225)>
+226 <regionmask._OneRegion: Indian Ocean Ter. (IOT / 226)>
+227 <regionmask._OneRegion: Heard I. and McDonald Is. (HM / 227)>
+228 <regionmask._OneRegion: Norfolk Island (NF / 228)>
+229 <regionmask._OneRegion: Ashmore and Cartier Is. (AU / 229)>
+230 <regionmask._OneRegion: Armenia (ARM / 230)>
+231 <regionmask._OneRegion: Argentina (AR / 231)>
+232 <regionmask._OneRegion: Antigua and Barb. (AG / 232)>
+233 <regionmask._OneRegion: Angola (AO / 233)>
+234 <regionmask._OneRegion: Andorra (AND / 234)>
+235 <regionmask._OneRegion: Algeria (DZ / 235)>
+236 <regionmask._OneRegion: Albania (AL / 236)>
+237 <regionmask._OneRegion: Afghanistan (AF / 237)>
+238 <regionmask._OneRegion: Siachen Glacier (SG / 238)>
+239 <regionmask._OneRegion: Antarctica (AQ / 239)>
+240 <regionmask._OneRegion: Sint Maarten (SX / 240)>
+241 <regionmask._OneRegion: Tuvalu (TV / 241)>
