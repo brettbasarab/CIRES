@@ -110,13 +110,11 @@ def increment_dtime_by_one_day(dtime):
 
 def read_hrrr_sfc_data_with_herbie(model_run_dt, fhour):
     # Access the data using the Herbie class
-    H = herbie.Herbie(f"{model_run_dt:%Y-%m-%d %H:%M}", # Model run date/time
-                      model = "hrrr", 
-                      product = "sfc", # Model-dependent product name
-                      fxx = fhour, # Forecast lead time
-                     )
-
-    return H
+    return herbie.Herbie(f"{model_run_dt:%Y-%m-%d %H:%M}", # Model run date/time
+                         model = "hrrr", 
+                         product = "sfc", # Model-dependent product name
+                         fxx = fhour, # Forecast lead time
+                        )
 
 # Return as xarray dataset
 # Clunky; see if can get the regex commands from the documentation working
