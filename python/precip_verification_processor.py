@@ -66,6 +66,7 @@ class PrecipVerificationProcessor(object):
                  poster = False): 
 
         self.data_grid = data_grid
+        self.data_grid_name = pdp.set_grid_name_for_file_names(self.data_grid)
         self.model_var_list = model_var_list
         self._set_region_info(region, region_extent)
         self.temporal_res = temporal_res
@@ -145,7 +146,7 @@ class PrecipVerificationProcessor(object):
         else:
             temporal_res_str = f"{self.temporal_res}_res_precipitation"
 
-        data_dir = f"{data_name}.{self.data_grid}Grid.{temporal_res_str}"
+        data_dir = f"{data_name}.{self.data_grid_name}.{temporal_res_str}"
         full_data_dir = os.path.join(self.netcdf_dir, data_dir)
         print(f"Data netcdf directory: {full_data_dir}")
         if (not os.path.exists(full_data_dir)):
@@ -245,7 +246,7 @@ class PrecipVerificationProcessor(object):
                 dataset_dir, temporal_res_str = self._construct_path_to_nc_precip_data(data_name)
                 obs_file_list = []
                 for dtime in self.valid_daily_dt_list:
-                    fname = f"{data_name}.{self.data_grid}Grid.{temporal_res_str}.{dtime:%Y%m%d}.nc"
+                    fname = f"{data_name}.{self.data_grid_name}.{temporal_res_str}.{dtime:%Y%m%d}.nc"
                     fpath = os.path.join(dataset_dir, fname)
                     if (not os.path.exists(fpath)):
                         print(f"Warning: Input file path {fpath} does not exist; not including in input file list")
@@ -1051,10 +1052,11 @@ class PrecipVerificationProcessor(object):
 
     def _configure_output_stats_nc_fpath(self, data_name, time_period_str, time_period_type = None, stat_type = None, agg_type = None):
         if (data_name == self.data_grid):
-            main_prefix = f"{data_name}.NativeGrid.{self.temporal_res:02d}_hour_precipitation"
+            grid_name = pdp.set_grid_name_for_file_names("native")
+            main_prefix = f"{data_name}.{grid_name}.{self.temporal_res:02d}_hour_precipitation"
             dir_name = f"{main_prefix}.stats"
         else:
-            main_prefix = f"{data_name}.{self.data_grid}Grid.{self.temporal_res:02d}_hour_precipitation"
+            main_prefix = f"{data_name}.{self.data_grid_name}.{self.temporal_res:02d}_hour_precipitation"
             dir_name = f"{main_prefix}.stats"
 
         nc_dir = os.path.join(self.netcdf_dir, dir_name)

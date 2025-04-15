@@ -545,7 +545,7 @@ def plot_cmap_single_panel(data_array, data_name, region, temporal_res = "native
         # Plot the data
         levels = variable_plot_limits(utils.accum_precip_var_name, temporal_res = temporal_res)
         if use_contourf:
-            lon_mesh, lat_mesh = np.meshgrid(data_to_plot["lon"], data_to_plot["lat"]) 
+            lon_mesh, lat_mesh = np.meshgrid(data_to_plot["lon"], data_to_plot["lat"])
             plot_handle = axis.contourf(lon_mesh, lat_mesh, data_to_plot, levels = levels, extend = "both", cmap = "viridis")
             plt.colorbar(plot_handle, orientation = "vertical", shrink = 0.7)
             plot_handle.colorbar.ax.set_yticks(levels)

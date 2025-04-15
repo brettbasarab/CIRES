@@ -30,7 +30,8 @@ def main():
     args = parser.parse_args()
 
     # Configure input directory
-    input_dir = f"CONUS404.{args.grid.title()}Grid.{args.temporal_res:02d}_hour_precipitation" 
+    output_grid_string = pdp.set_grid_name_for_file_names(args.grid)
+    input_dir = f"CONUS404.{output_grid_string}.{args.temporal_res:02d}_hour_precipitation" 
     input_dir = os.path.join(utils.data_nc_dir, input_dir)
     if not(os.path.exists(input_dir)):
         print(f"Error: Input directory {input_dir} does not exist")
@@ -45,7 +46,7 @@ def main():
     # Construct list of CONUS404 netCDF files to read into xarray Dataset
     input_file_list = []
     for dtime in valid_daily_dt_list:
-        fname = f"CONUS404.{args.grid.title()}Grid.{args.temporal_res:02d}_hour_precipitation.{dtime:%Y%m%d}.nc"
+        fname = f"CONUS404.{output_grid_string}.{args.temporal_res:02d}_hour_precipitation.{dtime:%Y%m%d}.nc"
         fpath = os.path.join(input_dir, fname)
         if (not os.path.exists(fpath)):
             print(f"Warning: Input file path {fpath} does not exist; not including in input file list")
@@ -73,7 +74,7 @@ def main():
                       sparse_cbar_ticks = sparse_cbar_ticks) 
     else:
         print(f"Plotting CONUS404 data on {args.grid.title()} grid")
-        pputils.plot_cmap_single_panel(data_to_plot, f"CONUS404.{args.grid.title()}Grid",
+        pputils.plot_cmap_single_panel(data_to_plot, f"CONUS404.{output_grid_string}",
                                        "CONUS", temporal_res = args.temporal_res, use_contourf = True,
                                        sparse_cbar_ticks = sparse_cbar_ticks)
 
