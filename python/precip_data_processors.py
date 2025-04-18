@@ -138,6 +138,7 @@ def write_data_array_to_netcdf(data_array, output_var_name, dir_name, fname_pref
                 data_to_write = data_array.sel(period_end_time = valid_dt)
                 print(f"Writing netCDF file {fpath}")
                 if not(testing):
+                    data_to_write.period_end_time.encoding["units"] = utils.seconds_since_unix_epoch_str 
                     data_to_write.to_netcdf(fpath, encoding = {output_var_name: {"dtype": "float32"}}) 
         elif (file_cadence == "day"):
             if (temporal_res == "native"):
@@ -163,6 +164,7 @@ def write_data_array_to_netcdf(data_array, output_var_name, dir_name, fname_pref
                 data_to_write = data_array[start_day_index:end_day_index, :, :]
                 print(f"Writing netCDF file {fpath}")
                 if not(testing):
+                    data_to_write.period_end_time.encoding["units"] = utils.seconds_since_unix_epoch_str 
                     data_to_write.to_netcdf(fpath, encoding = {output_var_name: {"dtype": "float32"}}) 
 
                 start_day_index += step 
@@ -187,6 +189,7 @@ def write_data_array_to_netcdf(data_array, output_var_name, dir_name, fname_pref
             data_to_write = data_array
             print(f"Writing netCDF file {fpath}")
             if not(testing):
+                data_to_write.period_end_time.encoding["units"] = utils.seconds_since_unix_epoch_str 
                 data_to_write.to_netcdf(fpath, encoding = {output_var_name: {"dtype": "float32"}})
 
 class ReplayDataProcessor(object):
