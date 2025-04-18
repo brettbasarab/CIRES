@@ -1210,7 +1210,6 @@ class AorcDataProcessor(ReplayDataProcessor):
             file_path = os.path.join(self.native_data_dir, f"{valid_dt:%Y}", file_base_pattern)
 
             # Ensure file exists
-            # FIXME: Proceed if a file doesn't exist (but need to handle the gap in time correctly)
             if (not os.path.exists(file_path)):
                 print(f"Error: Input file path {file_path} does not exist")
                 sys.exit(1) 
@@ -1276,8 +1275,7 @@ class AorcDataProcessor(ReplayDataProcessor):
             return 
         print(f"Spatially interpolating {self.obs_name} data to model data grid")
 
-        aorc_precip_to_interpolate = self.get_precip_data(temporal_res = self.model_temporal_res,
-                                                               spatial_res = "native").copy()
+        aorc_precip_to_interpolate = self.get_precip_data(temporal_res = self.model_temporal_res, spatial_res = "native").copy()
 
         # Change longitude coordinates of AORC to be a subset of [0, 360] to  match Replay coordinates.
         aorc_lons_0to360 = utils.longitude_to_0to360(aorc_precip_to_interpolate["lon"].values)
@@ -1381,7 +1379,6 @@ class CONUS404DataProcessor(object):
         if self.DEST_GRID_FLAG:
             self.dest_grid_name = dest_grid_name
             self.dest_temporal_res = dest_temporal_res
-            self._spatially_interpolate_conus404_to_dest_grid()
         else:
             self._read_conus404_dataset_from_azure()
 
@@ -1397,19 +1394,22 @@ class CONUS404DataProcessor(object):
                 self._calculate_conus404_native_accum_precip_amount(var)
  
     ##### GETTER METHODS (CONUS404DataProcessor) #####
-    def get_precip_data(self, spatial_res = "native", temporal_res = "native", load = False):
+    def get_precip_data(self, temporal_res = "native", spatial_res = "native", load = False):
         match spatial_res:
-            case "model":
+            case "dest_grid":
                 if (not self.DEST_GRID_FLAG): 
                     print(f"No data at {spatial_res} spatial resolution")
                     return
-                data_array = self._calculate_conus404_accum_precip_amount(time_period_hours = temporal_res, spatial_res = spatial_res) 
+                data_array = self.read_precip_data_from_netcdf(temporal_res = temporal_res, spatial_res = spatial_res) 
             case "native":
                 match temporal_res:
                     case "native":
                         data_array = self.conus404_native_accum_precip 
                     case _:
-                        data_array = self._calculate_conus404_accum_precip_amount(time_period_hours = temporal_res)
+                        if self.DEST_GRID_FLAG: # Read from existing netCDFs because we haven't loaded data from Azure
+                            data_array = self.read_precip_data_from_netcdf(temporal_res = temporal_res, spatial_res = spatial_res) 
+                        else: # Data will have been loaded from Azure, so proceed normally
+                            data_array = self._calculate_conus404_accum_precip_amount(time_period_hours = temporal_res)
 
         if load:
             print(f"Loading precip data for {self.data_name}")
@@ -1452,7 +1452,7 @@ class CONUS404DataProcessor(object):
             case _:
                 pass
 
-    # Sum totals at the CONUS404 temporal resolution to derive totals over longer time periods
+    # Sum totals at the native CONUS404 spatial resolution to derive totals over longer time periods
     # (3, 6, 12, 24 hours...).
     def _calculate_conus404_accum_precip_amount(self, time_period_hours = 3):
         time_step = int(time_period_hours/self.native_temporal_res)
@@ -1523,62 +1523,85 @@ class CONUS404DataProcessor(object):
             os.system(cdo_cmd)
 
     ##### PUBLIC METHODS (CONUS404DataProcessor) #####
-    # NOTE: Only data at the native CONUS404 spatial resolution can be written,
-    # since interpolation to other grids is performed via cdo for CONUS404.
-    def write_precip_data_to_netcdf(self, temporal_res = "native", file_cadence = "day", testing = False):
-        # Get data to write
-        full_data_array = self.get_precip_data(temporal_res = temporal_res, spatial_res = "native", load = True)
+    def read_precip_data_from_netcdf(self, temporal_res = 24, spatial_res = "native"):
+        # Construct list of CONUS404 netCDF files to read into xarray Dataset
+        input_file_list = []
+        if (spatial_res == "native"):
+            output_grid_string = set_grid_name_for_file_names("native")
+        elif (spatial_res == "dest_grid"):
+            output_grid_string = set_grid_name_for_file_names(self.dest_grid_name)
+        input_dir = os.path.join(utils.data_nc_dir, f"{self.data_name}.{output_grid_string}.{temporal_res:02d}_hour_precipitation")
+        for dtime in construct_daily_datetime_list(self.start_dt, self.end_dt): 
+            fname = f"{self.data_name}.{output_grid_string}.{temporal_res:02d}_hour_precipitation.{dtime:%Y%m%d}.nc"
+            fpath = os.path.join(input_dir, fname)
+            if (not os.path.exists(fpath)):
+                print(f"Warning: Input file path {fpath} does not exist; not including in input file list")
+                continue
+            input_file_list.append(fpath)
+        
+        if (len(input_file_list) == 0):
+            print(f"Error: No files found in input directory {input_dir}")
+            sys.exit(1)
 
-        if (temporal_res == "native"):
-            output_var_name = "precipitation"
-            formatted_short_name = format_short_name(full_data_array)
-        else:
-            output_var_name = f"precipitation_{temporal_res}_hour"
-            formatted_short_name = f"{temporal_res:02d}_hour_precipitation"
-        full_data_array.name = output_var_name
-        
-        # Construct file directory
-        output_grid_string = set_grid_name_for_file_names("native")
-        fname_prefix = f"{self.data_name}.{output_grid_string}.{formatted_short_name}" 
-        dir_name = os.path.join(self.netcdf_dir, fname_prefix)
-        
-        # Construct timestamp format
-        if (temporal_res == "native"):
-            timestamp_format = "%Y%m%d.%H%M"
-        elif (temporal_res < 24):
-            timestamp_format = "%Y%m%d.%H"
-        else:
-            timestamp_format = "%Y%m%d"
-        
-        write_data_array_to_netcdf(full_data_array,
-                                   output_var_name,
-                                   dir_name,
-                                   fname_prefix,
-                                   timestamp_format,
-                                   temporal_res = temporal_res,
-                                   file_cadence = file_cadence,
-                                   testing = testing)
+        # Open dataset
+        print("Reading data") 
+        ds = xr.open_mfdataset(input_file_list)
+        da = ds[f"precipitation_{temporal_res:02d}_hour"]
+
+        # Select data in specific date range
+        return da.loc[f"{self.start_dt:%Y-%m-%d %H:%M:%S}":f"{self.end_dt:%Y-%m-%d %H:%M:%S}"]
+
+    def write_precip_data_to_netcdf(self, spatial_res = "native", temporal_res = "native", file_cadence = "day", testing = False):
+        if (spatial_res == "native"):
+            # Get data to write
+            full_data_array = self.get_precip_data(temporal_res = temporal_res, load = True)
+
+            if (temporal_res == "native"):
+                output_var_name = "precipitation"
+                formatted_short_name = format_short_name(full_data_array)
+            else:
+                output_var_name = f"precipitation_{temporal_res}_hour"
+                formatted_short_name = f"{temporal_res:02d}_hour_precipitation"
+            full_data_array.name = output_var_name
+            
+            # Construct file directory
+            output_grid_string = set_grid_name_for_file_names("native")
+            fname_prefix = f"{self.data_name}.{output_grid_string}.{formatted_short_name}" 
+            dir_name = os.path.join(self.netcdf_dir, fname_prefix)
+            
+            # Construct timestamp format
+            if (temporal_res == "native"):
+                timestamp_format = "%Y%m%d.%H%M"
+            elif (temporal_res < 24):
+                timestamp_format = "%Y%m%d.%H"
+            else:
+                timestamp_format = "%Y%m%d"
+            
+            write_data_array_to_netcdf(full_data_array,
+                                       output_var_name,
+                                       dir_name,
+                                       fname_prefix,
+                                       timestamp_format,
+                                       temporal_res = temporal_res,
+                                       file_cadence = file_cadence,
+                                       testing = testing)
+        elif (spatial_res == "dest_grid"):
+            # This method will do the interpolation via cdo, so it writes to netCDF as part of that process.
+            self._spatially_interpolate_conus404_to_dest_grid()
 
 class NestedReplayDataProcessor(object):
     def __init__(self, start_dt_str, end_dt_str,
                        data_name = "NestedReplay",
-                       input_variable_list = ["accum_precip"],
+                       native_data_dir = os.path.join(utils.data_nc_dir, "NestedReplay.NativeGrid.01_hour_precipitation"),
                        native_temporal_res = 1, 
                        DEST_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to a different destination grid 
-                       dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to different destination grid (NOT the same as model_temporal_res in other classes)
+                       dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to different destination grid
                        dest_grid_name = "AORC",
                        region = "CONUS",
+                       replay_segment = "corrector",
                        user_dir = "bbasarab"):
  
-        # Process input variable list
-        if (len(input_variable_list) == 0):
-            print("Error: Must provide at least one input variable")
-            sys.exit(1)
-        self.input_variable_list = input_variable_list
-
         # Process start and end datetime strings into all the date/time info we'll need
-        self.DEST_GRID_FLAG = DEST_GRID_FLAG
-        self.native_temporal_res = native_temporal_res
         self.start_dt_str = start_dt_str
         self.end_dt_str = end_dt_str
         self.start_dt = check_model_valid_dt_format(self.start_dt_str, resolution = 1)
@@ -1590,15 +1613,30 @@ class NestedReplayDataProcessor(object):
         self.time_dim_name = utils.time_dim_str 
         self.period_begin_time_dim_str = utils.period_begin_time_dim_str 
         self.period_end_time_dim_str = utils.period_end_time_dim_str
+
+        # Set native temporal resolution and flag indicating whether there is a destination
+        # grid to interpolate to. 
+        self.native_temporal_res = native_temporal_res
+        self.DEST_GRID_FLAG = DEST_GRID_FLAG
  
         # File reading/writing and plotting
         self.data_name = data_name
+        self.native_data_dir = native_data_dir 
         self.region = region
+        self.replay_segment = replay_segment
         self.user_dir = user_dir
         self.home_dir = os.path.join("/home", self.user_dir)
         self.data_dir = os.path.join("/data", self.user_dir) 
         self.plot_output_dir = os.path.join(self.home_dir, "plots") 
         self.netcdf_dir = os.path.join(self.data_dir, "netcdf")
+        
+        # Read native precipitation data that we will process 
+        self._construct_valid_dt_lists()
+        self._construct_input_file_list()
+        self._read_input_files()
+        
+        # Extract hourly accumulated precipitation amounts 
+        self._calculate_nested_replay_native_accum_precip_amount()
 
         # If DEST_GRID_FLAG = True, define the parameters of the separate grid to which we'll interpolate. 
         if self.DEST_GRID_FLAG:
@@ -1606,32 +1644,16 @@ class NestedReplayDataProcessor(object):
             self.dest_temporal_res = dest_temporal_res
             self._spatially_interpolate_nested_replay_to_dest_grid()
 
-            # Data processing
-            self.nested_replay_da_dict = {}
-            for var in self.input_variable_list:
-                # Get data for current variable
-                current_variable = self.nested_replay_ds[var]
-          
-                # Save data indexed across the desired date/time range 
-                self.nested_replay_da_dict[var] = current_variable.loc[f"{self.start_dt:%Y-%m-%d %H:%M:%S}":f"{self.end_dt:%Y-%m-%d %H:%M:%S}"]
-
-                self._calculate_nested_replay_native_accum_precip_amount(var)
- 
     ##### GETTER METHODS (NestedReplayDataProcessor) #####
     def get_precip_data(self, spatial_res = "native", temporal_res = "native", load = False):
-        match spatial_res:
-            case "model":
-                if (not self.DEST_GRID_FLAG): 
-                    print(f"No data at {spatial_res} spatial resolution")
-                    return
-                data_array = self._calculate_nested_replay_accum_precip_amount(time_period_hours = temporal_res, spatial_res = spatial_res) 
-            case "native":
-                match temporal_res:
-                    case "native":
-                        data_array = self.conus404_native_accum_precip 
-                    case _:
-                        data_array = self._calculate_conus404_accum_precip_amount(time_period_hours = temporal_res)
-
+        if (spatial_res == "dest_grid") and not(self.DEST_GRID_FLAG):
+            print(f"No data at {spatial_res} spatial resolution")
+            return
+        elif (spatial_res == "native") and (temporal_res == "native"):
+            return self.nested_replay_native_accum_precip
+        else:
+            data_array = self._calculate_nested_replay_accum_precip_amount(time_period_hours = temporal_res, spatial_res = spatial_res)
+ 
         if load:
             print(f"Loading precip data for {self.data_name}")
             data_array.load()
@@ -1639,34 +1661,66 @@ class NestedReplayDataProcessor(object):
         return data_array
 
     ##### PRIVATE METHODS (NestedReplayDataProcessor) #####
-    def _calculate_nested_replay_native_accum_precip_amount(self, var_name):
-        match var_name:
-            case "accum_precip":
-                print(f"Calculating accumulated {self.data_name} precipitation from {var_name}")
+    def _construct_valid_dt_lists(self):
+        # Construct datetimes valid at end of each period (this is how AORC data are prsented)
+        current_dt = self.start_dt
+        self.valid_dt_list = [current_dt]
+        while (current_dt != self.end_dt):
+            current_dt += dt.timedelta(hours = self.native_temporal_res)
+            self.valid_dt_list.append(current_dt)
 
-                # For NestedReplay precip, standardize DataArray attributes
-                accum_precip_data_array = self.nested_replay_da_dict[var_name]
-                add_attributes_to_data_array(accum_precip_data_array,
-                                             short_name = f"{self.native_temporal_res}-hour precipitation",
-                                             long_name = f"Precipitation accumulated over the prior {self.native_temporal_res} hour(s)",
-                                             units = "mm",
-                                             interval_hours = self.native_temporal_res) 
-                accum_precip_data_array.name = utils.accum_precip_var_name
+        # Now construct list of valid days (PSL AORC files separated by day)
+        self.daily_dt_list = list(dateutil.rrule.rrule(dateutil.rrule.DAILY, dtstart = self.first_day_dt, until = self.final_day_dt))
 
-                # Change the name of the time dimension from "time" to "period_end_time"
-                accum_precip_data_array = accum_precip_data_array.rename({utils.time_dim_str: utils.period_end_time_dim_str,
-                                                                          "grid_xt": "lon",
-                                                                          "grid_yt": "lat"}) 
+    def _construct_input_file_list(self):
+        self.input_file_list = []
+        for valid_dt in self.daily_dt_list:
+            file_base_pattern = f"{self.data_name}.NativeGrid.accum_precip.nest.{self.replay_segment}.{valid_dt:%Y%m%d}.nc"
+            file_path = os.path.join(self.native_data_dir, file_base_pattern)
 
-                self.nested_replay_native_accum_precip = accum_precip_data_array 
-            case _:
-                pass
+            # Ensure file exists
+            if (not os.path.exists(file_path)):
+                print(f"Error: Input file path {file_path} does not exist")
+                sys.exit(1) 
+
+            self.input_file_list.append(file_path)
+            
+    def _read_input_files(self):
+        print(f"Reading {self.data_name} data from netCDF files into xarray Dataset")
+        self.xr_dataset = xr.open_mfdataset(self.input_file_list)
+
+    def _calculate_nested_replay_native_accum_precip_amount(self):
+        print(f"Calculating accumulated {self.data_name} precipitation")
+
+        # Use precip rate data directly, because it's average hourly precip rate (mm/hr) over the prior hour 
+        accum_precip_data_array = self.xr_dataset["accum_precip"].loc[f"{self.start_dt:%Y-%m-%d %H:%M:%S}":f"{self.end_dt:%Y-%m-%d %H:%M:%S}"]
+
+        # Change the name of the time dimension from "time" to "period_end_time"
+        accum_precip_data_array = accum_precip_data_array.rename({utils.time_dim_str: utils.period_end_time_dim_str,
+                                                                  "grid_xt": "lon",
+                                                                  "grid_yt": "lat"}) 
+       
+        # Add attributes to the accumulated precip data array
+        add_attributes_to_data_array(accum_precip_data_array,
+                                     short_name = f"{self.native_temporal_res}-hour precipitation",
+                                     long_name = f"Precipitation accumulated over the prior {self.native_temporal_res} hour(s)",
+                                     units = "mm",
+                                     interval_hours = self.native_temporal_res) 
+
+        self.nested_replay_native_accum_precip = accum_precip_data_array 
 
     # Sum totals at the NestedReplay temporal resolution to derive totals over longer time periods
     # (3, 6, 12, 24 hours...).
-    def _calculate_nested_replay_accum_precip_amount(self, time_period_hours = 3):
+    def _calculate_nested_replay_accum_precip_amount(self, time_period_hours = 3, spatial_res = "native"):
+        if (spatial_res == "native"):
+            raw_data = self.nested_replay_native_accum_precip
+        else:
+            if not(self.DEST_GRID_FLAG): 
+                print(f"No data at {spatial_res} spatial resolution")
+                return
+            raw_data = self.precip_dest_grid
+
         time_step = int(time_period_hours/self.native_temporal_res)
-        raw_data = self.nested_replay_native_accum_precip
         roller = raw_data.rolling({self.period_end_time_dim_str: time_step})
         accum_precip_data_array = roller.sum()[(time_step - 1)::time_step,:,:]
 
@@ -1682,10 +1736,12 @@ class NestedReplayDataProcessor(object):
         if (not self.DEST_GRID_FLAG): 
             print("No destination grid speecified; not spatially interpolating")
             return 
-        print(f"Spatially interpolating {self.obs_name} data to {self.dest_grid_name}")
+        print(f"Spatially interpolating {self.data_name} data to {self.dest_grid_name}")
 
-        nested_replay_precip_to_interpolate = self.get_precip_data(temporal_res = self.dest_temporal_res,
-                                                                   spatial_res = "native").copy()
+        # Ensure we select Nested Replay data at the native temporal resolution to interpolate.
+        # Calculation of accmulated amounts at different temporal resolutions is handled by
+        # _calculate_nested_replay_accum_precip_amount.
+        nested_replay_precip_to_interpolate = self.get_precip_data(temporal_res = "native").copy()
 
         # Get destination data array by instantiating the apppropriate class
         match self.dest_grid_name:
@@ -1694,16 +1750,16 @@ class NestedReplayDataProcessor(object):
                                                         self.end_dt_str,
                                                         MODEL_GRID_FLAG = False,
                                                         region = self.region)
-                self.dest_data_array = dest_grid_processor.get_precip_data(spatial_res = "native", temporal_res = self.dest_temporal_res)
+                self.dest_data_array = dest_grid_processor.get_precip_data(spatial_res = "native", temporal_res = "native")
             case "StageIV":
                 raise NotImplementedError 
             case _:
                 raise NotImplementedError 
 
-        # Spatially interpolate IMERG data to the model grid
-        self.precip_output_grid = spatially_interpolate_using_interp_like(nested_replay_precip_to_interpolate,
-                                                                          self.dest_data_array,   
-                                                                          correct_small_negative_values = True)   
+        # Spatially interpolate Nested Replay data to output grid 
+        self.precip_dest_grid = spatially_interpolate_using_interp_like(nested_replay_precip_to_interpolate,
+                                                                        self.dest_data_array,   
+                                                                        correct_small_negative_values = True)   
 
     # Use cdo command line utility to interpolate from the native NestedReplay grid
     # Using cdo requires that there exist netCDF files containing data at the native NestedReplay
@@ -1760,25 +1816,33 @@ class NestedReplayDataProcessor(object):
             os.system(cdo_cmd)
 
     ##### PUBLIC METHODS (NestedReplayDataProcessor) #####
-    # NOTE: Only data at the native NestedReplay spatial resolution can be written,
-    # since interpolation to other grids is performed via cdo for NestedReplay.
-    def write_precip_data_to_netcdf(self, temporal_res = "native", file_cadence = "day", testing = False):
+    # TODO: Implement ability to output data at the destination grid resolution.
+    def write_precip_data_to_netcdf(self, temporal_res = "native", spatial_res = "native", file_cadence = "day", testing = False):
+        if (spatial_res == "dest_grid") and (not self.DEST_GRID_FLAG):
+            print(f"No data at {spatial_res} spatial resoluation to write to netCDF")
+            return
+ 
         # Get data to write
-        full_data_array = self.get_precip_data(temporal_res = temporal_res, spatial_res = "native", load = True)
+        full_data_array = self.get_precip_data(temporal_res = temporal_res, spatial_res = spatial_res, load = True)
 
         if (temporal_res == "native"):
-            output_var_name = "precipitation"
-            formatted_short_name = format_short_name(full_data_array)
+            output_var_name = "precipitation_01_hour"
+            formatted_short_name = "01_hour_precipitation" 
         else:
-            output_var_name = f"precipitation_{temporal_res}_hour"
+            output_var_name = f"precipitation_{temporal_res:02d}_hour"
             formatted_short_name = f"{temporal_res:02d}_hour_precipitation"
         full_data_array.name = output_var_name
+
+        if (spatial_res == "native"):
+            output_grid_string = set_grid_name_for_file_names(spatial_res)
+        elif (spatial_res == "dest_grid"):
+            output_grid_string = set_grid_name_for_file_names(self.dest_grid_name)
         
         # Construct file directory
-        output_grid_string = set_grid_name_for_file_names("native")
-        fname_prefix = f"{self.data_name}.{output_grid_string}.{formatted_short_name}" 
-        dir_name = os.path.join(self.netcdf_dir, fname_prefix)
-        
+        dir_name = f"{self.data_name}.{output_grid_string}.{formatted_short_name}" 
+        dir_name = os.path.join(self.netcdf_dir, dir_name) 
+        fname_prefix = f"{self.data_name}.{output_grid_string}.{formatted_short_name}.{self.replay_segment}" 
+ 
         # Construct timestamp format
         if (temporal_res == "native"):
             timestamp_format = "%Y%m%d.%H%M"

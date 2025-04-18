@@ -10,6 +10,8 @@ import regionmask
 import sys
 import utilities as utils
 
+DEFAULT_PRECIP_CMAP = "terrain_r"
+
 @dataclasses.dataclass
 class RegionPlottingConfiguration:
     region_extent: [int, int, int, int]
@@ -519,7 +521,16 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
     return axes_list, cbar_ax
 
 # For each time in the period_end_time dimension of the data array, create a single-paneled contour plot of precipitation
-def plot_cmap_single_panel(data_array, data_name, region, temporal_res = "native", use_contourf = False, sparse_cbar_ticks = False):
+def plot_cmap_single_panel(data_array, data_name, region, temporal_res = "native", use_contourf = True, sparse_cbar_ticks = False,
+                           proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP):
+    match proj_name:
+        case "LambertConformal":
+            map_proj = ccrs.LambertConformal()
+            data_proj = ccrs.PlateCarree()
+        case _:
+            map_proj = ccrs.PlateCarree()
+            data_proj = ccrs.PlateCarree()
+
     dtimes = [pd.Timestamp(i) for i in data_array[utils.period_end_time_dim_str].values]
     for dtime in dtimes:
         # Select data to plot (at one valid time)
@@ -531,26 +542,36 @@ def plot_cmap_single_panel(data_array, data_name, region, temporal_res = "native
         print(f"Plotting {data_name} {data_array.short_name} data at {valid_dt_str}")
 
         # Set up the figure
-        proj = ccrs.PlateCarree() 
         plt.figure(figsize = regions_info_dict[region].figsize_sp) 
-        axis = plt.axes(projection = proj)
+        axis = plt.axes(projection = map_proj)
         axis.coastlines()
-        axis.set_extent(regions_info_dict[region].region_extent, crs = proj)
+        axis.set_extent(regions_info_dict[region].region_extent, crs = data_proj)
         axis.add_feature(cfeature.BORDERS)
         if ("US" in region):
             axis.add_feature(cfeature.STATES)
-        gl = axis.gridlines(crs = proj, color = "gray", alpha = 0.5, draw_labels = True,
+        gl = axis.gridlines(crs = data_proj, color = "gray", alpha = 0.5, draw_labels = True,
                             linewidth = 0.5, linestyle = "dashed")
         
         # Plot the data
         levels = variable_plot_limits(utils.accum_precip_var_name, temporal_res = temporal_res)
         if use_contourf:
-            lon_mesh, lat_mesh = np.meshgrid(data_to_plot["lon"], data_to_plot["lat"])
-            plot_handle = axis.contourf(lon_mesh, lat_mesh, data_to_plot, levels = levels, extend = "both", cmap = "viridis")
+            if (len(data_to_plot["lon"].shape) != len(data_to_plot["lat"].shape)):
+                print(f"Error: Shapes of longitude {data_to_plot['lon'].shape} and latitude {data_to_plot['lat'].shape} arrays don't match; can't plot with contourf")
+                sys.exit(1)
+
+            if (len(data_to_plot["lon"].shape) == 1): 
+                lon_mesh, lat_mesh = np.meshgrid(data_to_plot["lon"], data_to_plot["lat"])
+            elif (len(data_to_plot["lon"].shape) == 2):
+                lon_mesh, lat_mesh = data_to_plot["lon"], data_to_plot["lat"]
+            else:
+                print(f"Error: Latitude/longitude array shape is {data_to_plot['lon'].shape}; must have 1 or 2 dimensions to plot using contourf")
+                sys.exit(1)
+ 
+            plot_handle = axis.contourf(lon_mesh, lat_mesh, data_to_plot, levels = levels, extend = "both", transform = data_proj, cmap = cmap)
             plt.colorbar(plot_handle, orientation = "vertical", shrink = 0.7)
             plot_handle.colorbar.ax.set_yticks(levels)
         else:
-            plot_handle = data_to_plot.plot(ax = axis, levels  = levels, extend = "both", cmap = "viridis",
+            plot_handle = data_to_plot.plot(ax = axis, levels  = levels, extend = "max", transform = data_proj, cmap = cmap,
                                             cbar_kwargs = {"orientation": "vertical", "shrink": 0.7, "ticks": levels})
         
         # Configure axis labels, colorbar, and figure name
@@ -569,10 +590,68 @@ def plot_cmap_single_panel(data_array, data_name, region, temporal_res = "native
         plt.tight_layout()
 
         # Save figure
-        fig_name = f"cmap.{data_name}.{formatted_short_name}.{valid_dt_str}.{region}.png"
+        fname_proj_string = ""
+        if (proj_name != "PlateCarree"):
+            fname_proj_string = f"{proj}."
+        fig_name = f"cmap.{data_name}.{formatted_short_name}.{fname_proj_string}{valid_dt_str}.{region}.png"
         fig_path = os.path.join(utils.plot_output_dir, fig_name)
         print(f"Saving {fig_path}")
         plt.savefig(fig_path)
+
+# This function is still necessary because I haven't figured out atway to plot CONUS404 native grid data
+# (on the lambert conformal grid) using the xarray .plot() wrapper (it works but the output is nonsense).
+# For now, to avoid confusion, I'm maintaining this separate function that uses contourf only. This function
+# is very similar to plot_cmap_single_panel(). Ultimately, this CONUS404 native grid plotting issues needs to
+# be resolved to avoid having this nearly duplicate code. 
+def plot_conus404_native_grid(data_to_plot, plot_name = "native", proj = "PlateCarree", region = "CONUS", temporal_res = 24,
+                              sparse_cbar_ticks = False, cmap = DEFAULT_PRECIP_CMAP):
+    # Plot data on a map
+    match proj:
+        case "LambertConformal":
+            map_proj = ccrs.LambertConformal()
+            data_proj = ccrs.PlateCarree()
+        case _:
+            map_proj = ccrs.PlateCarree()
+            data_proj = ccrs.PlateCarree()
+
+    for i, idt in enumerate(data_to_plot["period_end_time"].values):
+        valid_dt = pd.Timestamp(idt)
+        print(f"Plotting {temporal_res}-hour precipitation data ending at {valid_dt:%Y%m%d.%H}")
+
+        # Configure plot
+        plt.figure(figsize = regions_info_dict[region].figsize_sp)
+        axis = plt.axes(projection = map_proj)
+        axis.coastlines()
+        axis.set_extent(regions_info_dict[region].region_extent, crs = data_proj)
+        gl = axis.gridlines(crs = data_proj, color = "gray", alpha = 0.5, draw_labels = True,
+                            linewidth = 0.5, linestyle = "dashed")
+        axis.add_feature(cfeature.BORDERS)
+        axis.add_feature(cfeature.STATES)
+        plt.title(f"{plot_name} {data_to_plot.short_name} ending at {valid_dt:%Y%m%d.%H}", size = 15)
+
+        # Plot data
+        levels = variable_plot_limits(utils.accum_precip_var_name, temporal_res = temporal_res)
+        p = axis.contourf(data_to_plot["lon"], data_to_plot["lat"], data_to_plot[i,:,:], transform = data_proj,
+                          extend = "both", cmap = cmap, levels = levels)
+        
+        # Configure colorbar 
+        plt.colorbar(p, orientation = "vertical", shrink = 0.7)
+        p.colorbar.ax.set_yticks(levels)
+        if sparse_cbar_ticks:
+            cbar_tick_labels = create_sparse_cbar_ticks(levels)
+        else:
+            cbar_tick_labels = levels
+        p.colorbar.ax.set_yticklabels(cbar_tick_labels)
+        p.colorbar.ax.tick_params(labelsize = 15)
+        p.colorbar.set_label(f"{data_to_plot.short_name} [{data_to_plot.units}]", size = 15)
+
+        # Save figure
+        plt.tight_layout()
+        formatted_short_name = pdp.format_short_name(data_to_plot)
+        fig_name = f"cmap.{plot_name}.{formatted_short_name}.{proj}.{valid_dt:%Y%m%d.%H}.{region}.png"
+        fig_fpath = os.path.join("/home/bbasarab/plots", fig_name)
+        print(f"Saving {fig_fpath}")
+        plt.savefig(fig_fpath)
 
 # Plot a blank map for each region defined in regions_info_dict 
 # This can be useful to assess whether the bounds for each region need to be adjusted, for example. 
@@ -595,4 +674,3 @@ def plot_blank_map_of_each_region():
         fig_path = os.path.join(utils.plot_output_dir, fig_name)
         print(f"Saving {fig_path}") 
         plt.savefig(fig_path)
-

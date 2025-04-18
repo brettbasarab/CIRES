@@ -93,24 +93,27 @@ def main():
  
     # Plot contour maps for visual inspection
     if (args.plot_maps):
-        if (args.data_name == "CONUS404"):
-            print(f"Sorry, this plotting as currently configured won't work for CONUS404. Please use plot_conus404.py")
-            sys.exit(0)
-        elif (args.data_name == "Replay"):
+        if (args.data_name == "Replay"):
             # Plot Replay data
             print(f"*** Plotting {processor.model_name} data")
             model_precip = processor.get_model_precip_data(time_period_hours = args.temporal_res, load = True)
             pputils.plot_cmap_single_panel(model_precip,
                                            processor.model_name,
                                            processor.region,
+                                           use_contourf = False,
                                            temporal_res = args.temporal_res)
         else:
+            use_contourf = False
+            if (args.data_name == "CONUS404"):
+                use_contourf = True
+
             # Plot QPE data at native spatial resolution
             print(f"*** Plotting {args.data_name} {args.temporal_res}-hourly data at native {args.data_name} spatial resolution")
             obs_precip = processor.get_precip_data(temporal_res = args.temporal_res, spatial_res = "native", load = True)
             pputils.plot_cmap_single_panel(obs_precip,
                                            processor.obs_name,
                                            processor.region,
+                                           use_contourf = use_contourf,
                                            temporal_res = args.temporal_res)
        
             if model_grid_flag: 
@@ -120,6 +123,7 @@ def main():
                 pputils.plot_cmap_single_panel(obs_precip_model_grid,
                                                f"{processor.obs_name}.{processor.model_name}Grid",
                                                processor.region,
+                                               use_contourf = False, 
                                                temporal_res = args.temporal_res)
 
                 # Plot Replay data
@@ -128,6 +132,7 @@ def main():
                 pputils.plot_cmap_single_panel(model_precip,
                                                processor.model_name,
                                                processor.region,
+                                               use_contourf = False, 
                                                temporal_res = args.temporal_res)
 
     return processor

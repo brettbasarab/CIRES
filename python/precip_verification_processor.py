@@ -1210,7 +1210,7 @@ class PrecipVerificationProcessor(object):
     # So, best practice is to have whatever data you want to plot exist as concatenated xarray DataArrays
     # with the proper time dimensions, as this method will make a plot for each coordinate of the time dimension.
     def plot_cmap_multi_panel(self, data_dict = None, time_period_type = "monthly", stat_type = "mean", pctl = 99,
-                              single_colorbar = True, single_set_of_levels = True, input_levels = None, cmap = "terrain_r",
+                              single_colorbar = True, single_set_of_levels = True, input_levels = None, cmap = pputils.DEFAULT_PRECIP_CMAP, 
                               plot_errors = False, write_to_nc = False):
         if (data_dict is None):
             if self.LOAD_DATA_FLAG: 
