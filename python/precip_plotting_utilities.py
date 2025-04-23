@@ -258,6 +258,31 @@ time_series_color_dict = {"AORC":       "blue",
                           "Replay":   "orange",
                          }
 
+# Get the name of the time dimension from a data array
+# looking through all time dimensions defined in utilities.py
+def get_time_dimension_name(data_array):
+    if (utils.time_dim_str in data_array.dims):
+        return utils.time_dim_str
+    elif (utils.period_begin_time_dim_str in data_array.dims):
+        return utils.period_begin_time_dim_str
+    elif (utils.period_end_time_dim_str in data_array.dims):
+        return utils.period_end_time_dim_str
+    elif (utils.months_dim_str in data_array.dims):
+        return utils.months_dim_str
+    elif (utils.seasons_dim_str in data_array.dims):
+        return utils.seasons_dim_str
+    elif (utils.annual_dim_str in data_array.dims):
+        return utils.annual_dim_str
+    elif (utils.full_period_dim_str in data_array.dims):
+        return utils.full_period_dim_str
+    elif (utils.common_month_dim_str in data_array.dims):
+        return utils.common_month_dim_str
+    elif (utils.common_season_dim_str in data_array.dims):
+        return utils.common_season_dim_str
+    else:
+        print("Error: Can't find a valid time dimension within dimensions {}")
+        sys.exit(1)
+
 # Create the CONUS mask, excluding AK and HI, to only include data over the lower 48 states (i.e., the CONUS)
 # Each state+DC is represented by an integer between 0 and 50 (clunky, but that's the way it is)
 # So there are 51 "states" total (regionmask refers to each stats as a region)
@@ -520,7 +545,7 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
 
     return axes_list, cbar_ax
 
-# For each time in the period_end_time dimension of the data array, create a single-paneled contour plot of precipitation
+# For each time in the data array, create a single-paneled contour plot of precipitation
 def plot_cmap_single_panel(data_array, data_name, region, temporal_res = "native", use_contourf = True, sparse_cbar_ticks = False,
                            proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP):
     match proj_name:
@@ -531,7 +556,8 @@ def plot_cmap_single_panel(data_array, data_name, region, temporal_res = "native
             map_proj = ccrs.PlateCarree()
             data_proj = ccrs.PlateCarree()
 
-    dtimes = [pd.Timestamp(i) for i in data_array[utils.period_end_time_dim_str].values]
+    time_dim = get_time_dimension_name(data_array)
+    dtimes = [pd.Timestamp(i) for i in data_array[time_dim].values]
     for dtime in dtimes:
         # Select data to plot (at one valid time)
         data_to_plot = data_array.sel(period_end_time = dtime)
@@ -598,7 +624,90 @@ def plot_cmap_single_panel(data_array, data_name, region, temporal_res = "native
         print(f"Saving {fig_path}")
         plt.savefig(fig_path)
 
-# This function is still necessary because I haven't figured out atway to plot CONUS404 native grid data
+# Contour maps with the correct number of panels, with the "truth" dataset always in the top left
+def plot_cmap_multi_panel(data_dict, region, truth_data_name, plot_levels, 
+                          use_contourf = False, sparse_cbar_ticks = False,
+                          single_colorbar = True, cmap = DEFAULT_PRECIP_CMAP):
+    # Configure basic info about the data
+    truth_da = data_dict[truth_data_name]
+    num_da = len(data_dict.items())
+    data_names_str = "".join(f"{key}." for key in data_dict.keys())
+
+    # Set map projection to be used for all subplots in the figure 
+    proj = ccrs.PlateCarree()
+
+    if (num_da >= 5):
+        figsize = regions_info_dict[region].figsize_mp_5plus
+    else:
+        figsize = regions_info_dict[region].figsize_mp
+
+    # Loop through these datetimes, making figures with subplots corresponding to each of the data arrays in data_dict
+    time_dim = get_time_dimension_name(truth_da)
+    dtimes = [pd.Timestamp(i) for i in truth_da[time_dim].values]
+    for dtime in dtimes:
+        if (type(dtime) is pd.Timestamp):
+            loc_str = dtime.strftime(utils.full_date_format_str) # Format is %Y-%m-%d %H:%M:%S
+            dt_str = dtime.strftime("%Y%m%d.%H")
+        elif (type(dtime) is str):
+            loc_str = dtime
+            dt_str = dtime
+        else:
+            print(f"Invalid datetime {dtime} to select data; not continuing to make plots")
+            return 
+
+        fig = plt.figure(figsize = figsize)
+        axes_list, cbar_ax = create_gridded_subplots(num_da, proj, single_colorbar = single_colorbar) 
+  
+        # Loop through each of the subplot axes defined above (one axis for each DataArray) and plot the data 
+        for axis, (data_name, da) in zip(axes_list, data_dict.items()):
+            axis.coastlines()
+            axis.set_extent(regions_info_dict[region].region_extent, crs = proj)
+            axis.add_feature(cfeature.BORDERS)
+            if ("US" in region):
+                axis.add_feature(cfeature.STATES)
+
+            subplot_title = data_name
+            data_to_plot = da.loc[loc_str]
+
+            # One colorbar for entire figure; add as its own separate axis defined using subplot2grid 
+            if single_colorbar:
+                plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
+                                                add_colorbar = not(single_colorbar))
+                cbar = fig.colorbar(plot_handle, cax = cbar_ax, ticks = plot_levels, shrink = 0.5, orientation = "horizontal")
+                cbar.set_label(da.units, size = 15)
+                cbar_tick_labels_rotation, cbar_tick_labels_fontsize = set_cbar_labels_rotation_and_fontsize(plot_levels, region, num_da, for_single_cbar = True)
+                cbar.ax.set_xticklabels(plot_levels, rotation = cbar_tick_labels_rotation) 
+                cbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
+            # Separate colorbar for each subplot
+            else:
+                plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
+                                                cbar_kwargs = {"shrink": 0.6, "ticks": plot_levels, "pad": 0.02, "orientation": "horizontal"})
+                plot_handle.colorbar.set_label(da.units, size = 15, labelpad = -1.3)
+                cbar_tick_labels = create_sparse_cbar_ticks(plot_levels) # 20241126: Label every other tick on subplot colorbars
+                cbar_tick_labels_rotation, cbar_tick_labels_fontsize = set_cbar_labels_rotation_and_fontsize(cbar_tick_labels, region, num_da, for_single_cbar = False)
+                plot_handle.colorbar.ax.set_xticklabels(cbar_tick_labels, rotation = cbar_tick_labels_rotation) 
+                plot_handle.colorbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
+
+            gl = axis.gridlines(crs = proj, color = "gray", alpha = 0.5, draw_labels = False,
+                                linewidth = 0.5, linestyle = "dashed")
+            axis.set_title(subplot_title, fontsize = 16) 
+
+        # Create the plot title 
+        formatted_short_name = precip_data_processors.format_short_name(truth_da)
+        if (type(dtime) is pd.Timestamp):
+            title_string = f"{region} {formatted_short_name} valid at {dt_str}"
+        else:
+            title_string = f"{region} {formatted_short_name}: {dt_str}"
+        fig.suptitle(title_string, fontsize = 16, fontweight = "bold")
+        fig.tight_layout()
+
+        # Save figure
+        fig_name = f"cmap.{data_names_str}{formatted_short_name}.{dt_str}.{region}.png"
+        fig_path = os.path.join(utils.plot_output_dir, fig_name)
+        print(f"Saving {fig_path}")
+        plt.savefig(fig_path)
+
+# This function is still necessary because I haven't figured out how to plot CONUS404 native grid data
 # (on the lambert conformal grid) using the xarray .plot() wrapper (it works but the output is nonsense).
 # For now, to avoid confusion, I'm maintaining this separate function that uses contourf only. This function
 # is very similar to plot_cmap_single_panel(). Ultimately, this CONUS404 native grid plotting issues needs to
@@ -614,7 +723,8 @@ def plot_conus404_native_grid(data_to_plot, plot_name = "native", proj = "PlateC
             map_proj = ccrs.PlateCarree()
             data_proj = ccrs.PlateCarree()
 
-    for i, idt in enumerate(data_to_plot["period_end_time"].values):
+    time_dim = get_time_dimension_name(data_to_plot)
+    for i, idt in enumerate(data_to_plot[time_dim].values):
         valid_dt = pd.Timestamp(idt)
         print(f"Plotting {temporal_res}-hour precipitation data ending at {valid_dt:%Y%m%d.%H}")
 
@@ -647,7 +757,7 @@ def plot_conus404_native_grid(data_to_plot, plot_name = "native", proj = "PlateC
 
         # Save figure
         plt.tight_layout()
-        formatted_short_name = pdp.format_short_name(data_to_plot)
+        formatted_short_name = precip_data_processors.format_short_name(data_to_plot)
         fig_name = f"cmap.{plot_name}.{formatted_short_name}.{proj}.{valid_dt:%Y%m%d.%H}.{region}.png"
         fig_fpath = os.path.join("/home/bbasarab/plots", fig_name)
         print(f"Saving {fig_fpath}")
