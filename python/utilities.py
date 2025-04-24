@@ -27,6 +27,7 @@ def suppress_warnings():
 time_dim_str = "time"
 period_begin_time_dim_str = "period_begin_time"
 period_end_time_dim_str = "period_end_time"
+days_dim_str = "days"
 months_dim_str = "months"
 seasons_dim_str = "seasons"
 annual_dim_str = "years"

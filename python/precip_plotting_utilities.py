@@ -251,11 +251,13 @@ def construct_seasonal_string_list():
 
 # Dictionary mapping dataset names to colors to use for the respective
 # lines on timeseries plots
-time_series_color_dict = {"AORC":       "blue",
-                          "CONUS404": "purple",
-                          "ERA5":        "red",
-                          "IMERG":     "green",
-                          "Replay":   "orange",
+time_series_color_dict = {"AORC":                       "blue",
+                          "CONUS404":                 "purple",
+                          "ERA5":                        "red",
+                          "IMERG":                     "green",
+                          "NestedReplay":            "magenta",
+                          "NestedReplayCorrector": "lightpink",
+                          "Replay":                   "orange",
                          }
 
 # Get the name of the time dimension from a data array

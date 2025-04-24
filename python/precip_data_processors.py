@@ -54,14 +54,14 @@ def add_attributes_to_data_array(data_array, short_name = None, long_name = None
     if (interval_hours is not None): 
         data_array.attrs["interval_hours"] = interval_hours 
 
-def check_model_valid_dt_format(dt_str, dt_fmt = "%Y%m%d.%H", resolution = 3):
+def check_model_valid_dt_format(dt_str, dt_fmt = "%Y%m%d.%H", resolution = 3, check_resolution = True):
     try:
         valid_dt = dt.datetime.strptime(dt_str, dt_fmt)
     except ValueError:
         print(f"Error: Input datetime string {dt_str} does not match format {dt_fmt}")
         sys.exit(1)
 
-    if valid_dt.hour % resolution != 0:
+    if check_resolution and (valid_dt.hour % resolution != 0):
         print(f"Error: Dataset is {resolution}-hourly; must provide a datetime at {resolution}-hourly intervals")
         sys.exit(1)
 
@@ -1842,9 +1842,15 @@ class NestedReplayDataProcessor(object):
             output_grid_string = set_grid_name_for_file_names(self.dest_grid_name)
         
         # Construct file directory
-        dir_name = f"{self.data_name}.{output_grid_string}.{formatted_short_name}" 
+        # Output corrector segment data with dir and file names 'NestedReplay'
+        # Output predictor segment data with dir and file names 'NestedReplayPredictor'
+        output_data_name_str = f"{self.data_name}"
+        if (self.replay_segment == "predictor"): 
+            output_data_name_str += self.replay_segment.title() 
+        
+        dir_name = f"{output_data_name_str}.{output_grid_string}.{formatted_short_name}" 
         dir_name = os.path.join(self.netcdf_dir, dir_name) 
-        fname_prefix = f"{self.data_name}.{output_grid_string}.{formatted_short_name}.{self.replay_segment}" 
+        fname_prefix = f"{output_data_name_str}.{output_grid_string}.{formatted_short_name}" 
  
         # Construct timestamp format
         if (temporal_res == "native"):

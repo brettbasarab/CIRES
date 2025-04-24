@@ -38,15 +38,20 @@ evaluate_by_radius_kwarg_options = [evaluate_by_radius_kwarg_str, "radius", "r"]
 
 # For a given region, return a list of the names of the datasets currently used
 # in verification, as well as the dataset that will be considered truth (truth_data_name)
-def map_region_to_data_names(region):
+def map_region_to_data_names(region, high_res = False):
     if ("US" in region): 
-        data_names = ["AORC", "CONUS404", "ERA5", "IMERG", "Replay"] 
         truth_data_name =  "AORC"
+        data_grid = "Replay"
+        data_names = ["AORC", "CONUS404", "ERA5", "IMERG", "Replay"]
+        if high_res:
+            data_grid = "AORC"
+            data_names = ["AORC", "CONUS404", "NestedReplay"] 
     else: 
-        data_names = ["IMERG", "Replay", "ERA5"]
         truth_data_name = "IMERG"
+        data_grid = "Replay"
+        data_names = ["IMERG", "Replay", "ERA5"]
 
-    return data_names, truth_data_name
+    return data_names, truth_data_name, data_grid
 
 class PrecipVerificationProcessor(object):
     def __init__(self, start_dt_str, end_dt_str,
@@ -67,8 +72,8 @@ class PrecipVerificationProcessor(object):
 
         self.data_grid = data_grid
         self.data_grid_name = pdp.set_grid_name_for_file_names(self.data_grid)
+        self.native_grid_name = pdp.set_grid_name_for_file_names("Native")
         self.model_var_list = model_var_list
-        self._set_region_info(region, region_extent)
         self.temporal_res = temporal_res
         self.thresholds = thresholds
         self.percentiles = percentiles
@@ -83,6 +88,17 @@ class PrecipVerificationProcessor(object):
         self.netcdf_dir = os.path.join(self.data_dir, "netcdf") 
         self.plot_output_dir = os.path.join(self.home_dir, "plots") 
         self.stats_output_dir = os.path.join(self.home_dir, "stats")
+
+        # If data are on the Replay grid, longitudes go from 0 to 360,
+        # rather than -180  to 180, and the latitude coordinates are flipped,
+        # i.e., they go from +90 to -90 (north to south).
+        if (self.data_grid == "Replay"):
+            self.LONS_360_FLAG = True 
+            self.LATS_FLIP_FLAG = True 
+        else:
+            self.LONS_360_FLAG = False 
+            self.LATS_FLIP_FLAG = False
+        self._set_region_info(region, region_extent)
 
         # If plots are for a poster, increase the fontsize of plot titles, axes labels, etc. 
         self.poster_font_increase = 0
@@ -146,7 +162,10 @@ class PrecipVerificationProcessor(object):
         else:
             temporal_res_str = f"{self.temporal_res}_res_precipitation"
 
-        data_dir = f"{data_name}.{self.data_grid_name}.{temporal_res_str}"
+        if (data_name == self.data_grid):
+            data_dir = f"{data_name}.{self.native_grid_name}.{temporal_res_str}"
+        else:
+            data_dir = f"{data_name}.{self.data_grid_name}.{temporal_res_str}"
         full_data_dir = os.path.join(self.netcdf_dir, data_dir)
         print(f"Data netcdf directory: {full_data_dir}")
         if (not os.path.exists(full_data_dir)):
@@ -156,8 +175,8 @@ class PrecipVerificationProcessor(object):
         return full_data_dir, temporal_res_str
 
     def _construct_valid_dt_list(self):
-        self.start_dt = pdp.check_model_valid_dt_format(self.start_dt_str) 
-        self.end_dt = pdp.check_model_valid_dt_format(self.end_dt_str)
+        self.start_dt = pdp.check_model_valid_dt_format(self.start_dt_str, check_resolution = False) 
+        self.end_dt = pdp.check_model_valid_dt_format(self.end_dt_str, check_resolution = False)
         
         # Construct annual datetime list (for annual stats, timeseries, etc.)
         # Because data we're working with are period-ending, if self.end_dt is, for example, 20090101.00,
@@ -186,7 +205,9 @@ class PrecipVerificationProcessor(object):
         while (current_daily_dt != end_daily_dt):
             current_daily_dt += dt.timedelta(days = 1)
             self.valid_daily_dt_list.append(current_daily_dt)
+        self.valid_daily_dt_list_period_begin = [dtime - dt.timedelta(days = 1) for dtime in self.valid_daily_dt_list[1:]]
         self.daily_time_period_str = f"{self.valid_daily_dt_list[0]:%Y%m%d}-{self.valid_daily_dt_list[-1]:%Y%m%d}"
+        self.daily_time_period_str_period_begin = f"{self.valid_daily_dt_list_period_begin[0]:%Y%m%d}-{self.valid_daily_dt_list_period_begin[-1]:%Y%m%d}"
 
         # Construct datetime list corresponding to temporal resolution of the data
         # AND representing period-END times of the data (e.g., the first valid time for
@@ -206,6 +227,7 @@ class PrecipVerificationProcessor(object):
         print(f"Annual time period: {self.annual_time_period_str}")
         print(f"Monthly time period: {self.monthly_time_period_str}")
         print(f"Daily time period: {self.daily_time_period_str}")
+        print(f"Daily time period (period-beginning): {self.daily_time_period_str_period_begin}")
         print(f"Data resolution time period: {self.time_period_str}")
 
     def _create_region_mask(self, data_array):
@@ -228,7 +250,6 @@ class PrecipVerificationProcessor(object):
         data_array = data_array.where(self.region_mask)
         return data_array 
 
-    
     def _read_region_subset_and_load_data(self):
         self.da_dict = {}
         for data_name in self.data_names:
@@ -246,7 +267,10 @@ class PrecipVerificationProcessor(object):
                 dataset_dir, temporal_res_str = self._construct_path_to_nc_precip_data(data_name)
                 obs_file_list = []
                 for dtime in self.valid_daily_dt_list:
-                    fname = f"{data_name}.{self.data_grid_name}.{temporal_res_str}.{dtime:%Y%m%d}.nc"
+                    if (data_name == self.data_grid):
+                        fname = f"{data_name}.{self.native_grid_name}.{temporal_res_str}.{dtime:%Y%m%d}.nc"
+                    else:
+                        fname = f"{data_name}.{self.data_grid_name}.{temporal_res_str}.{dtime:%Y%m%d}.nc"
                     fpath = os.path.join(dataset_dir, fname)
                     if (not os.path.exists(fpath)):
                         print(f"Warning: Input file path {fpath} does not exist; not including in input file list")
@@ -320,10 +344,11 @@ class PrecipVerificationProcessor(object):
         self.upper_lon = self.region_extent[1]
         self.lower_lat = self.region_extent[2]
         self.upper_lat = self.region_extent[3]
-        if (self.lower_lon < 0):
-            self.lower_lon += 360.0
-        if (self.upper_lon < 0):
-            self.upper_lon += 360.0
+        if (self.LONS_360_FLAG):
+            if (self.lower_lon < 0):
+                self.lower_lon += 360.0
+            if (self.upper_lon < 0):
+                self.upper_lon += 360.0
 
         # Determine if a region needs to be split into two subregions to be indexed properly
         # This is the case for Africa and Europe, which split across the meridian
@@ -342,9 +367,13 @@ class PrecipVerificationProcessor(object):
         if (self.region == "Global"):
             return data_array
         else:
-            if self.region_spans_meridian:
-                region_subset_west_of_meridian = data_array.sel(lat = slice(self.upper_lat, self.lower_lat), lon = slice(self.lower_lon, 360.0)) 
-                region_subset_east_of_meridian = data_array.sel(lat = slice(self.upper_lat, self.lower_lat), lon = slice(0.0, self.upper_lon))
+            if (self.region_spans_meridian) and (self.LONS_360_FLAG):
+                if (self.LATS_FLIP_FLAG):
+                    region_subset_west_of_meridian = data_array.sel(lat = slice(self.upper_lat, self.lower_lat), lon = slice(self.lower_lon, 360.0)) 
+                    region_subset_east_of_meridian = data_array.sel(lat = slice(self.upper_lat, self.lower_lat), lon = slice(0.0, self.upper_lon))
+                else:
+                    region_subset_west_of_meridian = data_array.sel(lat = slice(self.lower_lat, self.upper_lat), lon = slice(self.lower_lon, 360.0)) 
+                    region_subset_east_of_meridian = data_array.sel(lat = slice(self.lower_lat, self.upper_lat), lon = slice(0.0, self.upper_lon))
                 region_subset_data_array = xr.concat([region_subset_west_of_meridian, region_subset_east_of_meridian], dim = "lon")
 
                 # The slicing above will leave us with longitudes that go from (for example), ~340 to 360, then start over at zero. In other words,
@@ -355,8 +384,12 @@ class PrecipVerificationProcessor(object):
                 region_subset_data_array["lon"] = lons_m180to180
                 region_subset_data_array = region_subset_data_array.sortby("lon") 
             else:
-                region_subset_data_array = data_array.sel(lat = slice(self.upper_lat, self.lower_lat), lon = slice(self.lower_lon, self.upper_lon))
+                if (self.LATS_FLIP_FLAG):
+                    region_subset_data_array = data_array.sel(lat = slice(self.upper_lat, self.lower_lat), lon = slice(self.lower_lon, self.upper_lon))
+                else:
+                    region_subset_data_array = data_array.sel(lat = slice(self.lower_lat, self.upper_lat), lon = slice(self.lower_lon, self.upper_lon))
 
+        print(f"Region subset data array shape: {region_subset_data_array.shape}")
         # For certain regions, take an extra step and mask the data to only the land/geopolitical boundaries of that region.
         # For CONUS, for example, avoids including grid points from the ocean, Mexico, and Canada in the stats (e.g., the very high precip Gulf Stream area).
         print(f"Masking data to only the geopolitical boundaries of this region (if applicable)")
@@ -794,8 +827,9 @@ class PrecipVerificationProcessor(object):
     def _process_time_period_type_to_dtimes(self, time_period_type):
         match time_period_type:
             case "daily":
+                dtimes = self.valid_daily_dt_list_period_begin # Need period beginning times for daily data
                 dim_name = "days"
-                raise NotImplementedError
+                time_period_str = self.daily_time_period_str_period_begin
             case "monthly":
                 dtimes = self.valid_monthly_dt_list
                 dim_name = utils.months_dim_str 
@@ -870,6 +904,12 @@ class PrecipVerificationProcessor(object):
     # filter a DataArray to only data within the current dtime, to be subsequently aggregated.
     def _determine_agg_data_from_time_period_type(self, data_array, time_period_type, dtime):
         match time_period_type:
+            case "daily":
+                dtime_str = f"{dtime:%Y-%m-%d}"
+                data_to_aggregate = data_array.sel(period_begin_time = dtime_str)
+                # If working with daily (as opposed to sub-daily) data, the .sel call above will remove the time dimension. Use expand_dims to add it back.
+                if (len(data_to_aggregate.shape) == 2):
+                    data_to_aggregate = data_to_aggregate.expand_dims(dim = {utils.period_begin_time_dim_str: [dtime]})
             case "monthly":
                 dtime_str = f"{dtime:%Y-%m}"
                 data_to_aggregate = data_array.sel(period_begin_time = dtime_str)
@@ -884,6 +924,8 @@ class PrecipVerificationProcessor(object):
                 data_to_aggregate = self._select_data_by_common_time_period(data_array, dtime)
             case "common_seasonal":
                 data_to_aggregate = self._select_data_by_common_time_period(data_array, dtime)
+            case _:
+                raise NotImplementedError
 
         return data_to_aggregate
 
@@ -1052,8 +1094,7 @@ class PrecipVerificationProcessor(object):
 
     def _configure_output_stats_nc_fpath(self, data_name, time_period_str, time_period_type = None, stat_type = None, agg_type = None):
         if (data_name == self.data_grid):
-            grid_name = pdp.set_grid_name_for_file_names("native")
-            main_prefix = f"{data_name}.{grid_name}.{self.temporal_res:02d}_hour_precipitation"
+            main_prefix = f"{data_name}.{self.native_grid_name}.{self.temporal_res:02d}_hour_precipitation"
             dir_name = f"{main_prefix}.stats"
         else:
             main_prefix = f"{data_name}.{self.data_grid_name}.{self.temporal_res:02d}_hour_precipitation"
@@ -1363,13 +1404,19 @@ class PrecipVerificationProcessor(object):
             case "mean": 
                 title_string = f"{stat_type}, {self.region}"
                 fig_name_prefix = "mean"
-                yticks = pputils.regions_info_dict[self.region].ts_mean_precip_range 
+                yticks = pputils.regions_info_dict[self.region].ts_mean_precip_range
+                if (time_period_type == "daily"):
+                    yticks *= 2.0 
                 axis_label = self._format_short_short_name(truth_da)
             case _:
                 raise NotImplementedError
 
         fig_name_prefix = f"{time_period_type}_{fig_name_prefix}"
         match time_period_type:
+            case "daily":
+                time_period_str = self.daily_time_period_str_period_begin 
+                title_string = f"Daily {title_string}: {time_period_str}"
+                xlabel = "Days"
             case "monthly":
                 time_period_str = self.monthly_time_period_str
                 title_string = f"Monthly {title_string}: {time_period_str}"
@@ -1684,6 +1731,9 @@ class PrecipVerificationProcessor(object):
         if (utils.time_dim_str in dims):
             time_dim = utils.time_dim_str
             dt_format = "%Y%m%d.%H%M" 
+        elif (utils.days_dim_str in dims):
+            time_dim = utils.days_dim_str
+            dt_format = "%Y%m%d"
         elif (utils.period_begin_time_dim_str in dims):
             time_dim = utils.period_begin_time_dim_str 
             dt_format = "%Y%m%d.%H" 
