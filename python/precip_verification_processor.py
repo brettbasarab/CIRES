@@ -532,13 +532,6 @@ class PrecipVerificationProcessor(object):
 
         return stat_dict
 
-    def _convert_occ_stats_np_array_to_data_array(self, np_array, data_coords, stat_name):
-        # Convert numpy array to DataArray
-        da = xr.DataArray(np_array, coords = [data_coords], dims = ["threshold"])
-        da.name = stat_name 
-
-        return da
-
     # Calculate correlation coefficient
     def calculate_pearsonr(self, model_precip, obs_precip):
         model_precip_values_flat = model_precip.values.flatten()
@@ -588,8 +581,6 @@ class PrecipVerificationProcessor(object):
             frequency_bias = (hits + false_alarms)/(hits + misses)
         else:
             frequency_bias = np.nan 
-
-        
 
     # Calculate statistics valid for data aggregated in space, time, or space and time. Currently
     # only mean and percentile stats are supported. 
@@ -958,6 +949,13 @@ class PrecipVerificationProcessor(object):
                 return
 
         return dtimes, dim_name, time_period_str
+
+    def _convert_occ_stats_np_array_to_data_array(self, np_array, data_coords, stat_name):
+        # Convert numpy array to DataArray
+        da = xr.DataArray(np_array, coords = [data_coords], dims = ["threshold"])
+        da.name = stat_name 
+
+        return da
 
     # Convert period-ending time dimension to period beginning; useful for certain statistics
     # to ensure that a period such as January 31 (ending at 00z February 1) is included within January stats.
