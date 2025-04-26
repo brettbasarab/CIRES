@@ -46,8 +46,13 @@ UNIX_EPOCH = dt.datetime(1970, 1, 1, 0, 0, 0)
 unix_epoch_str = UNIX_EPOCH.strftime(full_date_format_str) # UNIX_EPOCH in format "1970-01-01 00:00:00"
 seconds_since_unix_epoch_str = f"seconds since {unix_epoch_str}"
 
-# Replay grid cell size in degrees
+# Replay native grid cell size in degrees
 replay_grid_cell_size = 0.234375
+
+# AORC native grid cell size in degrees
+aorc_grid_cell_size = 0.033332
+
+# Default list of evaluation radii for FSS (in number of grid cells)
 default_fss_eval_radius_list_grid_cells = np.array([1, 2, 3, 4, 6, 8, 12, 20, 40, 80])
 
 # DATA DIRECTORY PATHS 

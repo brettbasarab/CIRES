@@ -19,19 +19,19 @@ def main():
     parser = argparse.ArgumentParser(description = program_description)
     # Fundamental positional arguments and flags to configure verification properly
     parser.add_argument("start_dt_str",
-                        help = "Start date/time of verification; format YYYYmmdd.HH")
+                        help = "Start date/time of verification; format consistent with temporal_res flag, e.g., 'YYYYmmdd' for 24-hourly data")
     parser.add_argument("end_dt_str",
-                        help = "End date/time of verification; format YYYYmmdd.HH")
-    parser.add_argument("--region", dest = "region", default = "Global",
-                        help = "Region to zoom plot to; default Global")
+                        help = "End date/time of verification; format consistent with temporal_res flag, e.g., 'YYYYmmdd' for 24-hourly data")
+    parser.add_argument("--region", dest = "region", default = "CONUS",
+                        help = "Region to zoom plot to; default CONUS")
     parser.add_argument("--region_ext", dest = "region_ext", nargs = "+", type = int,
                         help = "Lon and lat boundaries for a non-standard region; order llon, ulon, llat, ulat; region name must also be provided as --region flag") 
     parser.add_argument("--temporal_res", default = 24, type = int, choices = [1, 3, 24],
                         help = "Temporal resolution of precip data used in verification (default 24)")
     parser.add_argument("--data_names_list", dest = "data_names_list", default = None, nargs = "+",
                         help = "List of data names to verify; pass space-separated with the truth data name listed first; if None, all possible datasets for the given region are verified")
-    parser.add_argument("--replay_grid_cell_size", dest = "replay_grid_cell_size", type = float, default = utils.replay_grid_cell_size, 
-                        help = f"Assumed grid cell size of the Replay grid for FSS and other calculations; default (near-)actual size of {utils.replay_grid_cell_size} degrees")
+    parser.add_argument("--grid_cell_size", dest = "grid_cell_size", type = float, default = utils.replay_grid_cell_size, 
+                        help = f"Assumed grid cell size for FSS and other calculations; default Replay grid cell size of {utils.replay_grid_cell_size} degrees")
     parser.add_argument("--high_res", dest = "high_res", action = "store_true", default = False,
                         help = "Set to verify CONUS high-resolution datasets (AORC, CONUS404, NestedReplay, etc.)")
     # Statistics flags: set which statistic(s) to calculated
@@ -108,12 +108,13 @@ def main():
     if args.fss:
         print("**** Calculating FSS")
         # Calculate FSS by radius and threshold for each valid time
-        eval_radius_list = utils.default_fss_eval_radius_list_grid_cells * args.replay_grid_cell_size 
-        fss_dict_by_radius = verif.calculate_fss(eval_type = "by_radius", grid_cell_size = args.replay_grid_cell_size,
+        eval_radius_list = utils.default_fss_eval_radius_list_grid_cells * args.grid_cell_size 
+        fss_dict_by_radius = verif.calculate_fss(eval_type = "by_radius", grid_cell_size = args.grid_cell_size,
+                                                 fixed_threshold = 10,
                                                  eval_radius_list = eval_radius_list,
                                                  write_to_nc = args.write_to_nc)
-        fss_dict_by_thresh = verif.calculate_fss(eval_type = "by_threshold", grid_cell_size = args.replay_grid_cell_size,
-                                                 fixed_radius = 2 * args.replay_grid_cell_size,
+        fss_dict_by_thresh = verif.calculate_fss(eval_type = "by_threshold", grid_cell_size = args.grid_cell_size,
+                                                 fixed_radius = 2 * args.grid_cell_size,
                                                  write_to_nc = args.write_to_nc)
 
         # Plot FSS, averaged across evaluation period 

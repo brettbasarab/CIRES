@@ -54,14 +54,19 @@ def add_attributes_to_data_array(data_array, short_name = None, long_name = None
     if (interval_hours is not None): 
         data_array.attrs["interval_hours"] = interval_hours 
 
-def check_model_valid_dt_format(dt_str, dt_fmt = "%Y%m%d.%H", resolution = 3, check_resolution = True):
+def check_model_valid_dt_format(dt_str, resolution = 3, check_resolution = True):
+    if (resolution < 24):
+        dt_fmt = "%Y%m%d.%H"
+    else:
+        dt_fmt = "%Y%m%d"
+
     try:
         valid_dt = dt.datetime.strptime(dt_str, dt_fmt)
     except ValueError:
-        print(f"Error: Input datetime string {dt_str} does not match format {dt_fmt}")
+        print(f"Error: Input datetime string {dt_str} does not match format {dt_fmt}, the required date/time format for {resolution}-hourly data")
         sys.exit(1)
 
-    if check_resolution and (valid_dt.hour % resolution != 0):
+    if (check_resolution) and (valid_dt.hour % resolution != 0):
         print(f"Error: Dataset is {resolution}-hourly; must provide a datetime at {resolution}-hourly intervals")
         sys.exit(1)
 
@@ -874,8 +879,8 @@ class ERA5DataProcessor(ReplayDataProcessor):
         self.input_variable_list = input_variable_list
         self.start_dt_str = start_dt_str
         self.end_dt_str = end_dt_str
-        self.start_dt = check_model_valid_dt_format(self.start_dt_str)
-        self.end_dt = check_model_valid_dt_format(self.end_dt_str)
+        self.start_dt = check_model_valid_dt_format(self.start_dt_str, resolution = 3)
+        self.end_dt = check_model_valid_dt_format(self.end_dt_str, resolution = 3)
         self.start_dt_period_end = self.start_dt + dt.timedelta(hours = self.temporal_res)
         self.end_dt_period_end = self.end_dt + dt.timedelta(hours = self.temporal_res)
         self.start_dt_str_period_end = self.start_dt_period_end.strftime("%Y%m%d.%H")

@@ -27,6 +27,7 @@ class StatsDataClass:
     misses: int
     false_alarms: int
     correct_negatives: int
+    total_events: int
     frequency_bias: float
     CSI: float
     ETS: float
@@ -175,8 +176,8 @@ class PrecipVerificationProcessor(object):
         return full_data_dir, temporal_res_str
 
     def _construct_valid_dt_list(self):
-        self.start_dt = pdp.check_model_valid_dt_format(self.start_dt_str, check_resolution = False) 
-        self.end_dt = pdp.check_model_valid_dt_format(self.end_dt_str, check_resolution = False)
+        self.start_dt = pdp.check_model_valid_dt_format(self.start_dt_str, resolution = self.temporal_res) 
+        self.end_dt = pdp.check_model_valid_dt_format(self.end_dt_str, resolution = self.temporal_res)
         
         # Construct annual datetime list (for annual stats, timeseries, etc.)
         # Because data we're working with are period-ending, if self.end_dt is, for example, 20090101.00,
@@ -254,39 +255,29 @@ class PrecipVerificationProcessor(object):
         self.da_dict = {}
         for data_name in self.data_names:
             print(f"**** Reading dataset {data_name}")
-            if (data_name == "Replay"): 
-                replay_processor = pdp.ReplayDataProcessor(self.start_dt_str,
-                                                           self.end_dt_str,
-                                                           model_name = "Replay", 
-                                                           obs_name = None, 
-                                                           input_variable_list = self.model_var_list,
-                                                           region = self.region)
+            dataset_dir, temporal_res_str = self._construct_path_to_nc_precip_data(data_name)
+            file_list = []
+            for dtime in self.valid_daily_dt_list:
+                if (data_name == self.data_grid):
+                    fname = f"{data_name}.{self.native_grid_name}.{temporal_res_str}.{dtime:%Y%m%d}.nc"
+                else:
+                    fname = f"{data_name}.{self.data_grid_name}.{temporal_res_str}.{dtime:%Y%m%d}.nc"
+                fpath = os.path.join(dataset_dir, fname)
+                if (not os.path.exists(fpath)):
+                    print(f"Warning: Input file path {fpath} does not exist; not including in input file list")
+                    continue
+                file_list.append(fpath)
 
-                precip_da = replay_processor.get_model_precip_data(time_period_hours = self.temporal_res)
-            else:
-                dataset_dir, temporal_res_str = self._construct_path_to_nc_precip_data(data_name)
-                obs_file_list = []
-                for dtime in self.valid_daily_dt_list:
-                    if (data_name == self.data_grid):
-                        fname = f"{data_name}.{self.native_grid_name}.{temporal_res_str}.{dtime:%Y%m%d}.nc"
-                    else:
-                        fname = f"{data_name}.{self.data_grid_name}.{temporal_res_str}.{dtime:%Y%m%d}.nc"
-                    fpath = os.path.join(dataset_dir, fname)
-                    if (not os.path.exists(fpath)):
-                        print(f"Warning: Input file path {fpath} does not exist; not including in input file list")
-                        continue
-                    obs_file_list.append(fpath)
+            if (len(file_list) == 0):
+                print(f"Error: No input files found in directory {dataset_dir}; can't proceed with verification")
+                sys.exit(1)
 
-                if (len(obs_file_list) == 0):
-                    print(f"Error: No input files found in directory {dataset_dir}; can't proceed with verification")
-                    sys.exit(1)
+            dataset = xr.open_mfdataset(file_list)
+            precip_da = dataset[f"precipitation_{self.temporal_res}_hour"]
+            precip_da.attrs["data_name"] = data_name
 
-                dataset = xr.open_mfdataset(obs_file_list)
-                precip_da = dataset[f"precipitation_{self.temporal_res}_hour"]
-
-                # Index obs data array to correct datetime range
-                precip_da = precip_da.loc[f"{self.start_dt:%Y-%m-%d %H:%M:%S}":f"{self.end_dt:%Y-%m-%d %H:%M:%S}"]
-                #precip_da = precip_da.loc[self.start_dt.strftime(utils.full_date_format_str):self.end_dt.strftime(utils.full_date_format_str)]
+            # Index obs data array to correct datetime range
+            precip_da = precip_da.loc[self.start_dt.strftime(utils.full_date_format_str):self.end_dt.strftime(utils.full_date_format_str)]
 
             self.da_dict[data_name] = self._subset_data_to_region(precip_da, data_name = data_name)
 
@@ -422,57 +413,131 @@ class PrecipVerificationProcessor(object):
     ############################################################################
     ##### Public methods stats calculations #####
     # Calculate occurence statistics
-    def calculate_occ_stats(self, threshold, model_precip, obs_precip):
-        hits = self.calculate_hits(threshold, model_precip, obs_precip)
-        misses = self.calculate_misses(threshold, model_precip, obs_precip)
-        false_alarms = self.calculate_false_alarms(threshold, model_precip, obs_precip)
-        correct_negatives = self.calculate_correct_negatives(threshold, model_precip, obs_precip)
-        total_number_of_forecasts = hits + misses + false_alarms + correct_negatives
+    def calculate_occ_stats(self, input_da_dict = None,
+                            threshold_list = [1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 75.0, 100.0]):
+        if (input_da_dict is None):
+            input_da_dict = self.da_dict
 
-        print("**** Bulk stats:")
-        print(f"Threshold: {threshold} mm")
-        print(f"Hits: {hits}")
-        print(f"Misses: {misses}")
-        print(f"False Alarms: {false_alarms}")
-        print(f"Correct Negatives: {correct_negatives}")
-        print(f"Total Number of Events: {total_number_of_forecasts}")
+        threshold_da = xr.DataArray(np.array(threshold_list))
+        pdp.add_attributes_to_data_array(threshold_da, units = "mm")
+        data_coords = threshold_da 
+ 
+        occ_stats_dict = {}
+        obs_precip = input_da_dict[self.truth_data_name]
+        for data_name, da in input_da_dict.items():
+            if (data_name == self.truth_data_name):
+                continue
+            model_precip = input_da_dict[data_name] 
+            print(f"Calculating occurence statistics for dataset {data_name}")
+
+            # Calculate FSS for varying evaluation radius, fixed threshold
+            hits_list = []
+            misses_list = []
+            false_alarms_list = []
+            correct_negatives_list = []
+            total_events_list = []
+            frequency_bias_list = []
+            CSI_list = []
+            ETS_list = []
+            for threshold in threshold_list:
+                hits = self.calculate_hits(threshold, model_precip, obs_precip)
+                hits_list.append(hits)
+
+                misses = self.calculate_misses(threshold, model_precip, obs_precip)
+                misses_list.append(misses)
                 
-        # Frequency bias
-        # Measures the ratio of the frequency of forecast events to the frequency of observed events
-        # See https://www.cawcr.gov.au/projects/verification/verif_web_page.html#Methods_for_dichotomous_forecasts
-        if (hits + misses > 0):
-            frequency_bias = (hits + false_alarms)/(hits + misses)
-        else:
-            frequency_bias = np.nan 
+                false_alarms = self.calculate_false_alarms(threshold, model_precip, obs_precip)
+                false_alarms_list.append(false_alarms)
 
-        # CSI (Critical Success Index) AKA TS (Threat Score)
-        # Measures the fraction of observed and/or forecast events that were correctly predicted
-        # See https://www.cawcr.gov.au/projects/verification/verif_web_page.html#Methods_for_dichotomous_forecasts
-        if (hits + misses + false_alarms > 0):
-            CSI = hits/(hits + misses + false_alarms)
-        else:
-            CSI = np.nan
+                correct_negatives = self.calculate_correct_negatives(threshold, model_precip, obs_precip)
+                correct_negatives_list.append(correct_negatives)
 
-        # ETS (Equitable Threat Score) AKA Gilbert Skill Score
-        # Measures the fraction of observed and/or forecast events that were correctly predicted, adjusted for hits associated with random chance
-        # https://www.cawcr.gov.au/projects/verification/verif_web_page.html#Methods_for_dichotomous_forecasts
-        hits_random = (hits + misses) * (hits + false_alarms) / total_number_of_forecasts
-        if (hits + misses + false_alarms - hits_random > 0): 
-            ETS = (hits - hits_random)/(hits + misses + false_alarms - hits_random)
-        else:
-            ETS = np.nan
+                total_events = hits + misses + false_alarms + correct_negatives
+                total_events_list.append(total_events)
 
-        stats_data_class = StatsDataClass(
-                                         threshold = threshold,
-                                         hits = hits,
-                                         misses = misses,
-                                         false_alarms = false_alarms,
-                                         correct_negatives = correct_negatives,
-                                         frequency_bias = frequency_bias,
-                                         CSI = CSI,
-                                         ETS = ETS
-                                        )
-        return stats_data_class
+                # Frequency bias
+                # Measures the ratio of the frequency of forecast events to the frequency of observed events
+                # See https://www.cawcr.gov.au/projects/verification/verif_web_page.html#Methods_for_dichotomous_forecasts
+                if (hits + misses > 0):
+                    frequency_bias = (hits + false_alarms)/(hits + misses)
+                else:
+                    frequency_bias = np.nan 
+                frequency_bias_list.append(frequency_bias)
+
+                # CSI (Critical Success Index) AKA TS (Threat Score)
+                # Measures the fraction of observed and/or forecast events that were correctly predicted
+                # See https://www.cawcr.gov.au/projects/verification/verif_web_page.html#Methods_for_dichotomous_forecasts
+                if (hits + misses + false_alarms > 0):
+                    CSI = hits/(hits + misses + false_alarms)
+                else:
+                    CSI = np.nan
+                CSI_list.append(CSI)
+
+                # ETS (Equitable Threat Score) AKA Gilbert Skill Score
+                # Measures the fraction of observed and/or forecast events that were correctly predicted, adjusted for hits associated with random chance
+                # https://www.cawcr.gov.au/projects/verification/verif_web_page.html#Methods_for_dichotomous_forecasts
+                hits_random = (hits + misses) * (hits + false_alarms) / total_events
+                if (hits + misses + false_alarms - hits_random > 0): 
+                    ETS = (hits - hits_random)/(hits + misses + false_alarms - hits_random)
+                else:
+                    ETS = np.nan
+                ETS_list.append(ETS)
+    
+            hits_da = self._convert_occ_stats_np_array_to_data_array(np.array(hits_list), data_coords, "hits")
+            misses_da = self._convert_occ_stats_np_array_to_data_array(np.array(misses_list), data_coords, "misses")   
+            false_alarms_da = self._convert_occ_stats_np_array_to_data_array(np.array(false_alarms_list), data_coords, "false_alarms")
+            correct_negatives_da = self._convert_occ_stats_np_array_to_data_array(np.array(correct_negatives_list), data_coords, "correct_negatives")
+            total_events_da = self._convert_occ_stats_np_array_to_data_array(np.array(total_events_list), data_coords, "total_events")
+            frequency_bias_da = self._convert_occ_stats_np_array_to_data_array(np.array(frequency_bias_list), data_coords, "frequency_bias")
+            CSI_da = self._convert_occ_stats_np_array_to_data_array(np.array(CSI_list), data_coords, "CSI")
+            ETS_da = self._convert_occ_stats_np_array_to_data_array(np.array(ETS_list), data_coords, "ETS")
+
+            occ_stats_dict[data_name] = StatsDataClass(
+                                                       threshold = threshold_da,
+                                                       hits = hits_da,
+                                                       misses = misses_da,
+                                                       false_alarms = false_alarms_da,
+                                                       correct_negatives = correct_negatives_da,
+                                                       total_events = total_events_da,
+                                                       frequency_bias = frequency_bias_da,
+                                                       CSI = CSI_da,
+                                                       ETS = ETS_da
+                                                      )
+
+        return occ_stats_dict 
+
+    def extract_occ_stat(self, occ_stats_dict, which_stat):
+        stat_dict = {}
+        for data_name, stats_data in occ_stats_dict.items():
+            match which_stat:
+                case "hits":
+                    stat_dict[data_name] = stats_data.hits
+                case "misses":
+                    stat_dict[data_name] = stats_data.misses
+                case "false_alarms":
+                    stat_dict[data_name] = stats_data.false_alarms
+                case "correct_negatives":
+                    stat_dict[data_name] = stats_data.correct_negatives
+                case "total_events":
+                    stat_dict[data_name] = stats_data.total_events
+                case "frequency_bias":
+                    stat_dict[data_name] = stats_data.frequency_bias
+                case "CSI":
+                    stat_dict[data_name] = stats_data.CSI
+                case "ETS":
+                    stat_dict[data_name] = stats_data.ETS
+                case _:
+                    print(f"Error: Unrecognized occurence stat type {which_stat}")
+                    return
+
+        return stat_dict
+
+    def _convert_occ_stats_np_array_to_data_array(self, np_array, data_coords, stat_name):
+        # Convert numpy array to DataArray
+        da = xr.DataArray(np_array, coords = [data_coords], dims = ["threshold"])
+        da.name = stat_name 
+
+        return da
 
     # Calculate correlation coefficient
     def calculate_pearsonr(self, model_precip, obs_precip):
@@ -512,6 +577,19 @@ class PrecipVerificationProcessor(object):
         correct_negatives_condition = (model_precip < threshold) & (obs_precip < threshold)
         number_of_correct_negatives = len(np.where(correct_negatives_condition.values.flatten())[0])
         return number_of_correct_negatives
+
+    # Calculate frequency bias
+    def calculate_frequency_bias(self, threshold, model_precip, obs_precip):
+        hits = self.calculate_hits(self, threshold, model_precip, obs_precip)
+        misses = self.calculate_misses(self, threshold, model_precip, obs_precip)
+        false_alarms = self.calculate_false_alarms(self, threshold, model_precip, obs_precip)
+
+        if (hits + misses > 0):
+            frequency_bias = (hits + false_alarms)/(hits + misses)
+        else:
+            frequency_bias = np.nan 
+
+        
 
     # Calculate statistics valid for data aggregated in space, time, or space and time. Currently
     # only mean and percentile stats are supported. 
@@ -684,9 +762,9 @@ class PrecipVerificationProcessor(object):
     # valid time to a dictionary of DataArrays, so this dict can subsequently be
     # handled similarly to self.da_dict. The dimensions are (num_valid_times * num_eval_radii [num_thresholds]). 
     def calculate_fss(self, eval_type = evaluate_by_radius_kwarg_str, 
+                      grid_cell_size = 0.25, # in degrees lat/lon 
                       fixed_radius = 0.5, # in degrees lat/lon
                       fixed_threshold = 10.0, # in mm 
-                      grid_cell_size = 0.25, # in degrees lat/lon 
                       eval_radius_list = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0, 20.0], # in degrees lat/lon
                       eval_threshold_list = [1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 75.0, 100.0], # in mm
                       time_period_type = "full_period",
@@ -797,12 +875,6 @@ class PrecipVerificationProcessor(object):
         if (time_period_type == "seasonal"):
             dtimes = self._construct_season_dt_ranges(data_array)
         
-        # Process eventual attributes of aggregated data arrays
-        #short_name = self.truth_da.short_name
-        #long_name = self.truth_da.long_name
-        #short_name = short_name + f" {time_period_type} FSS"
-        #long_name = f"{time_period_type.title()} FSS" + long_name 
-
         fss_agg_dict = {}
         for dtime in dtimes:
             da_dict_fss_each_dtime = {}
@@ -820,6 +892,33 @@ class PrecipVerificationProcessor(object):
             fss_agg_dict[dtime] = da_dict_fss_each_dtime
 
         return fss_agg_dict 
+
+    # Calculated occurence statistics aggregated over specified time periods (common monthly, common seasonal, etc.)
+    def calculate_aggregated_occ_stats(self, which_stat, time_period_type = "full_period"):
+        # Process time_period_type: list of date times, dimension name, etc.
+        dtimes, dim_name, time_period_str = self._process_time_period_type_to_dtimes(time_period_type)
+
+        # If aggregating seasonally, dtimes, which in this case will be a list of lists defining
+        # seasonal datetime ranges, wasn't defined above. Define it here, since we need data_array's
+        # time dimensions to be converted to period ending first
+        if (time_period_type == "seasonal"):
+            dtimes = self._construct_season_dt_ranges(data_array)
+        
+        occ_stats_agg_dict = {}
+        obs_da = self._convert_period_end_to_period_begin(self.truth_da)
+        for dtime in dtimes:
+            stat_dict_each_dtime = {}
+            da_dict_each_dtime = {}
+            for data_name, data_array in self.da_dict.items(): 
+                # Convert data coordinates to period beginning (much easier to aggregate over months that way)
+                data_array = self._convert_period_end_to_period_begin(data_array)
+                da_dict_each_dtime[data_name] = self._determine_agg_data_from_time_period_type(data_array, time_period_type, dtime)
+                
+            all_occ_stats_dict = self.calculate_occ_stats(da_dict_each_dtime)
+            stat_dict = self.extract_occ_stat(all_occ_stats_dict, which_stat)
+            occ_stats_agg_dict[dtime] = stat_dict 
+
+        return occ_stats_agg_dict 
     ##### END Public methods stats calculations #####
 
     ##### Private methods to support stats calculations #####
@@ -1113,15 +1212,20 @@ class PrecipVerificationProcessor(object):
         if (agg_type is not None):
             main_prefix += f".{agg_type}"
         
-        fname = f"{main_prefix}.{time_period_str}.{self.region}.nc"
+        fname = f"{main_prefix}.{ime_period_str}.{self.region}.nc"
         fpath = os.path.join(nc_dir, fname)
         return fpath
     ##### END Private methods to support stats calculations #####
 
     ##### Public methods plotting #####
-    def plot_aggregated_fss(self, eval_type = evaluate_by_radius_kwarg_str, xaxis_explicit_values = False, time_period_type = "full_period"):
-        # Aggregate data to plot
+    def plot_aggregated_fss(self, eval_type = evaluate_by_radius_kwarg_str, xaxis_explicit_values = False,
+                            time_period_type = "full_period", include_frequency_bias = False):
+        # Aggregated FSS data to plot
         fss_agg_dict = self.calculate_aggregated_fss(eval_type = eval_type, time_period_type = time_period_type)
+
+        # Frequency bias data to plot
+        if include_frequency_bias:
+            frequency_bias_dict = self.calculate_aggregated_occ_stats("frequency_bias", time_period_type = time_period_type)
         
         # Based on this particular dataset, get a list of all the valid datetimes we're going to plot
         dtimes = sorted(list(fss_agg_dict.keys()))
@@ -1181,15 +1285,30 @@ class PrecipVerificationProcessor(object):
             plt.yticks(np.arange(0, 1.1, 0.1), fontsize = 15) 
             plt.grid(True, linewidth = 1.5)
 
-            # Plot data
+            # Plot FSS data
             for data_name, da in da_dict_this_dtime.items():
                 if (data_name == self.truth_data_name):
                     continue
                 plt.plot(xaxis_var, da, linewidth = 2, label = data_name,
                          color = pputils.time_series_color_dict[data_name])
+            plt.legend(loc = "best", prop = {"size": 15})
+
+            # Plot frequency bias data
+            if include_frequency_bias:
+                frequency_bias_dict_this_dtime = frequency_bias_dict[dtime]
+                ax1 = plt.gca() 
+                ax2 = ax1.twinx()
+                for data_name, da in frequency_bias_dict_this_dtime.items():
+                    if (data_name == self.truth_data_name):
+                        continue
+                    ax2.set_ylabel("Frequency Bias", size = 15)
+                    ax2.set_ylim(0, 2.0)
+                    ax2.set_yticks(np.arange(0, 2.2, 0.2))
+                    ax2.tick_params(axis = "y", labelsize = 15)
+                    ax2.plot(xaxis_var, da, linewidth = 2, linestyle = "dashed",
+                             color = pputils.time_series_color_dict[data_name])
 
             # Save figure 
-            plt.legend(loc = "best", prop = {"size": 15})
             fig_path = os.path.join(self.plot_output_dir, fig_name)
             print(f"Saving {fig_path}")
             plt.savefig(fig_path)
