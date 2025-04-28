@@ -55,6 +55,12 @@ aorc_grid_cell_size = 0.033332
 # Default list of evaluation radii for FSS (in number of grid cells)
 default_fss_eval_radius_list_grid_cells = np.array([1, 2, 3, 4, 6, 8, 12, 20, 40, 80])
 
+# Default list of evaluation thresholds for FSS and occurence stats (in mm)
+default_eval_threshold_list_mm = [1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 75.0, 80.0, 90.0, 100.0]
+
+# Default list of percentile evaluation thresholds for FSS and occurence stats
+default_eval_threshold_list_pctl = [5.0, 10.0, 25.0, 50.0, 75.0, 90.0, 95.0]
+
 # DATA DIRECTORY PATHS 
 #################################################################################
 # PSL Linux machines directories 

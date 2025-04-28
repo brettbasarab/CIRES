@@ -34,6 +34,7 @@ class StatsDataClass:
 
 # Default variable used as keyword to evaluate FSS for varying radius
 evaluate_by_radius_kwarg_str = "by_radius"
+
 # List of variables that can be used as keyword to evaluate FSS for varying radius
 evaluate_by_radius_kwarg_options = [evaluate_by_radius_kwarg_str, "radius", "r"]
 
@@ -414,7 +415,7 @@ class PrecipVerificationProcessor(object):
     ##### Public methods stats calculations #####
     # Calculate occurence statistics
     def calculate_occ_stats(self, input_da_dict = None,
-                            threshold_list = [1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 75.0, 100.0]):
+                            threshold_list = utils.default_eval_threshold_list_mm): 
         if (input_da_dict is None):
             input_da_dict = self.da_dict
 
@@ -578,9 +579,9 @@ class PrecipVerificationProcessor(object):
         false_alarms = self.calculate_false_alarms(self, threshold, model_precip, obs_precip)
 
         if (hits + misses > 0):
-            frequency_bias = (hits + false_alarms)/(hits + misses)
+            return (hits + false_alarms)/(hits + misses)
         else:
-            frequency_bias = np.nan 
+            return np.nan 
 
     # Calculate statistics valid for data aggregated in space, time, or space and time. Currently
     # only mean and percentile stats are supported. 
@@ -632,8 +633,7 @@ class PrecipVerificationProcessor(object):
             data_array = self._convert_period_end_to_period_begin(da)
 
             # If aggregating seasonally, dtimes, which in this case will be a list of lists defining
-            # seasonal datetime ranges, wasn't defined above. Define it here, since we need data_array's
-            # time dimensions to be converted to period ending first
+            # seasonal datetime ranges, wasn't defined above.
             if (time_period_type == "seasonal"):
                 dtimes = self._construct_season_dt_ranges(data_array)
 
@@ -686,8 +686,7 @@ class PrecipVerificationProcessor(object):
         dtimes, dim_name, time_period_str = self._process_time_period_type_to_dtimes(time_period_type)
 
         # If aggregating seasonally, dtimes, which in this case will be a list of lists defining
-        # seasonal datetime ranges, wasn't defined above. Define it here, since we need data_array's
-        # time dimensions to be converted to period ending first
+        # seasonal datetime ranges, wasn't defined above.
         if (time_period_type == "seasonal"):
             dtimes = self._construct_season_dt_ranges(data_array)
 
@@ -757,9 +756,10 @@ class PrecipVerificationProcessor(object):
                       fixed_radius = 0.5, # in degrees lat/lon
                       fixed_threshold = 10.0, # in mm 
                       eval_radius_list = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0, 20.0], # in degrees lat/lon
-                      eval_threshold_list = [1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 40.0, 50.0, 75.0, 100.0], # in mm
+                      eval_threshold_list = utils.default_eval_threshold_list_mm, 
                       time_period_type = "full_period",
                       radius_units = "deg", # For degrees lat/lon; otherwise km, etc.
+                      is_pctl_threshold = False,
                       write_to_nc = False
                       ):
         # Process time_period_type: list of date times, dimension name, etc.
@@ -802,11 +802,13 @@ class PrecipVerificationProcessor(object):
                 fss_list = []
                 if (eval_type in evaluate_by_radius_kwarg_options):
                     for radius in eval_radius_list:
-                        FSS = self._calculate_fss_single_grid(qpf, qpe, radius, grid_cell_size, fixed_threshold)
+                        FSS = self._calculate_fss_single_grid(qpf, qpe, radius, grid_cell_size, fixed_threshold,
+                                                              is_pctl_threshold = is_pctl_threshold)
                         fss_list.append(FSS)
                 else:
                     for threshold in eval_threshold_list:
-                        FSS = self._calculate_fss_single_grid(qpf, qpe, fixed_radius, grid_cell_size, threshold)
+                        FSS = self._calculate_fss_single_grid(qpf, qpe, fixed_radius, grid_cell_size, threshold,
+                                                              is_pctl_threshold = is_pctl_threshold)
                         fss_list.append(FSS)
     
                 fss_tmp_array = np.array(fss_list).reshape((1, fss_data_coords.shape[0]))
@@ -861,8 +863,7 @@ class PrecipVerificationProcessor(object):
         dtimes, dim_name, time_period_str = self._process_time_period_type_to_dtimes(time_period_type)
 
         # If aggregating seasonally, dtimes, which in this case will be a list of lists defining
-        # seasonal datetime ranges, wasn't defined above. Define it here, since we need data_array's
-        # time dimensions to be converted to period ending first
+        # seasonal datetime ranges, wasn't defined above.
         if (time_period_type == "seasonal"):
             dtimes = self._construct_season_dt_ranges(data_array)
         
@@ -890,15 +891,13 @@ class PrecipVerificationProcessor(object):
         dtimes, dim_name, time_period_str = self._process_time_period_type_to_dtimes(time_period_type)
 
         # If aggregating seasonally, dtimes, which in this case will be a list of lists defining
-        # seasonal datetime ranges, wasn't defined above. Define it here, since we need data_array's
-        # time dimensions to be converted to period ending first
+        # seasonal datetime ranges, wasn't defined above.
         if (time_period_type == "seasonal"):
             dtimes = self._construct_season_dt_ranges(data_array)
         
         occ_stats_agg_dict = {}
         obs_da = self._convert_period_end_to_period_begin(self.truth_da)
         for dtime in dtimes:
-            stat_dict_each_dtime = {}
             da_dict_each_dtime = {}
             for data_name, data_array in self.da_dict.items(): 
                 # Convert data coordinates to period beginning (much easier to aggregate over months that way)
@@ -1142,14 +1141,20 @@ class PrecipVerificationProcessor(object):
     # Calculate FSS for a single spatial grid (i.e., at a single valid time).
     # Code from Craig Schwartz via Trevor Alcott. See 20250130 email from Trevor
     # which is part of thread entitled "Experience with fractions skill score?"
-    def _calculate_fss_single_grid(self, qpf, qpe, radius, grid_cell_size, threshold):
+    def _calculate_fss_single_grid(self, qpf, qpe, radius, grid_cell_size, threshold, is_pctl_threshold = False):
         # Calculate footprint, i.e., evaluation area
         footprint = self._get_footprint_for_fss(radius, grid_cell_size)
 
         # Convert qpf and qpe arrays to numpy arrays containing 1s and 0s based on
-        # whether precipitation amount is at or above (set to 1) or below (set to 0) <threshold>. 
-        binary_qpf = self._mask_data_array_based_on_threshold(qpf, threshold)
-        binary_qpe = self._mask_data_array_based_on_threshold(qpe, threshold)
+        # whether precipitation amount is at or above (set to 1) or below (set to 0) <threshold>.
+        if is_pctl_threshold:
+            threshold_amount_qpf = qpf.quantile(threshold/100.0) 
+            threshold_amount_qpe = qpe.quantile(threshold/100.0)
+            binary_qpf = self._mask_data_array_based_on_threshold(qpf, threshold_amount_qpf)
+            binary_qpe = self._mask_data_array_based_on_threshold(qpe, threshold_amount_qpe)
+        else: 
+            binary_qpf = self._mask_data_array_based_on_threshold(qpf, threshold)
+            binary_qpe = self._mask_data_array_based_on_threshold(qpe, threshold)
 
         # Calculate forecast_fractions and observed fractions terms in the FSS formula.
         # These are the M (model) and O (observed) terms calculated in Roberts and Lean (2008)
@@ -1221,17 +1226,15 @@ class PrecipVerificationProcessor(object):
         # Aggregated FSS data to plot
         fss_agg_dict = self.calculate_aggregated_fss(eval_type = eval_type, time_period_type = time_period_type)
 
-        # Frequency bias data to plot
-        if include_frequency_bias:
+        # Frequency bias data to plot (done for plotting against thresholds, only)
+        if (include_frequency_bias) and (eval_type not in evaluate_by_radius_kwarg_options):
             frequency_bias_dict = self.calculate_aggregated_occ_stats("frequency_bias", time_period_type = time_period_type)
         
         # Based on this particular dataset, get a list of all the valid datetimes we're going to plot
         dtimes = sorted(list(fss_agg_dict.keys()))
         
-        # Plot data
+        # Loop through dtimes, creating a plot for each one 
         for dtime in dtimes: 
-            da_dict_this_dtime = fss_agg_dict[dtime]
-
             if (type(dtime) is pd.Timestamp) or (type(dtime) is dt.datetime):
                 dt_str = dtime.strftime("%Y%m") 
             elif (type(dtime) is str):
@@ -1261,52 +1264,70 @@ class PrecipVerificationProcessor(object):
                     xaxis_var = self.fss_eval_radius_da 
                     xticks = np.arange(0, xaxis_var[-1] + 1, 1)
             else:
-                title = f"FSS vs. threshold, {self.region} {short_name} (r = {self.fixed_fss_eval_radius:0.2f} {self.fss_eval_radius_units}): {dt_str}"
+                title_prefix = "FSS"
+                figname_prefix = "FSS"
+                if include_frequency_bias:
+                    title_prefix += ", frequency bias"
+                    figname_prefix += ".freqBias."
+                title = f"{title_prefix} vs. threshold, {self.region} {short_name} (r = {self.fixed_fss_eval_radius:0.2f} {self.fss_eval_radius_units}): {dt_str}"
                 xlabel = "Threshold (mm)" 
-                fig_name = f"FSSthreshold.{self.data_names_str}radius{self.fixed_fss_eval_radius:0.2f}{self.fss_eval_radius_units}.{time_period_type}.{short_name}.{dt_str_ext}.{self.region}.png"
+                fig_name = f"{figname_prefix}threshold.{self.data_names_str}radius{self.fixed_fss_eval_radius:0.2f}{self.fss_eval_radius_units}.{time_period_type}.{short_name}.{dt_str_ext}.{self.region}.png"
                 if xaxis_explicit_values:
                     xaxis_var = np.arange(self.fss_eval_threshold_da.shape[0])
                     xticks = self.fss_eval_threshold_da.values
                 else:
                     xaxis_var = self.fss_eval_threshold_da
                     xticks = np.arange(0, xaxis_var[-1] + 10, 10)
-            plt.figure(figsize = (12, 10))
-            plt.title(title, size = 15)
-            plt.xlabel(xlabel, size = 15)
-            plt.ylabel("Fractions Skill Score (FSS)", size = 15)
-            plt.xlim(xaxis_var[0], xaxis_var[-1])
-            plt.ylim(0, 1.0)
-            if xaxis_explicit_values:
-                plt.xticks(xaxis_var, xticks, fontsize = 15)
+            fig = plt.figure(figsize = (13, 10))
+
+            plot_dicts_list = [ fss_agg_dict[dtime] ]
+            ylabels_list = ["Fractions Skill Score (FSS)"]
+            ylims_list = [ (0, 1.0) ]
+            yticks_list = [ np.arange(0, 1.1, 0.1) ]
+            subplot_titles_list = ["FSS"]
+            if (include_frequency_bias) and (eval_type not in evaluate_by_radius_kwarg_options):
+                axes_list = [
+                            plt.subplot2grid((1, 2), (0, 0), colspan = 1, rowspan = 1),
+                            plt.subplot2grid((1, 2), (0, 1), colspan = 1, rowspan = 1),
+                            ]
+                plot_dicts_list.append(frequency_bias_dict[dtime])
+                ylabels_list.append("Frequency Bias")
+                ylims_list.append( (0, 2.0) )
+                yticks_list.append( np.arange(0, 2.2, 0.2) )
+                subplot_titles_list.append("Frequency Bias")
             else:
-                plt.xticks(xticks, fontsize = 15)
-            plt.yticks(np.arange(0, 1.1, 0.1), fontsize = 15) 
-            plt.grid(True, linewidth = 1.5)
+                axes_list = [
+                            plt.subplot2grid((1, 1), (0, 0)),
+                            ]
 
-            # Plot FSS data
-            for data_name, da in da_dict_this_dtime.items():
-                if (data_name == self.truth_data_name):
-                    continue
-                plt.plot(xaxis_var, da, linewidth = 2, label = data_name,
-                         color = pputils.time_series_color_dict[data_name])
-            plt.legend(loc = "best", prop = {"size": 15})
+            # Plot data
+            for axis, plot_dict, ylabel, ylims, yticks, subplot_title in zip(axes_list, plot_dicts_list, ylabels_list, ylims_list, yticks_list, subplot_titles_list):
+                axis.set_xlabel(xlabel, size = 15)
+                axis.set_ylabel(ylabel, size = 15)
+                axis.set_xlim(xaxis_var[0], xaxis_var[-1])
+                axis.set_ylim(ylims)
+                if xaxis_explicit_values:
+                    axis.set_xticks(xaxis_var, xticks)
+                else:
+                    axis.set_xticks(xticks)
+                axis.set_yticks(yticks) 
+                axis.tick_params(axis = "both", labelsize = 15)
+                axis.grid(True, linewidth = 1.5)
 
-            # Plot frequency bias data
-            if include_frequency_bias:
-                frequency_bias_dict_this_dtime = frequency_bias_dict[dtime]
-                ax1 = plt.gca() 
-                ax2 = ax1.twinx()
-                for data_name, da in frequency_bias_dict_this_dtime.items():
+                for data_name, da in plot_dict.items():
                     if (data_name == self.truth_data_name):
                         continue
-                    ax2.set_ylabel("Frequency Bias", size = 15)
-                    ax2.set_ylim(0, 2.0)
-                    ax2.set_yticks(np.arange(0, 2.2, 0.2))
-                    ax2.tick_params(axis = "y", labelsize = 15)
-                    ax2.plot(xaxis_var, da, linewidth = 2, linestyle = "dashed",
+                    axis.plot(xaxis_var, da, linewidth = 2, label = data_name,
                              color = pputils.time_series_color_dict[data_name])
+                if (include_frequency_bias) and (eval_type not in evaluate_by_radius_kwarg_options):
+                    axis.set_title(subplot_title, fontsize = 15)
+                    if (ylabel == "Frequency Bias"): # If we're working on the frequency bias axis, add a line at bias = 1 (unbiased forecast)
+                        axis.plot([0, xaxis_var[-1]], [1, 1], linewidth = 3, color = "black") 
+                axis.legend(loc = "best", prop = {"size": 15})
 
             # Save figure 
+            fig.suptitle(title, size = 15)
+            fig.tight_layout()
             fig_path = os.path.join(self.plot_output_dir, fig_name)
             print(f"Saving {fig_path}")
             plt.savefig(fig_path)
