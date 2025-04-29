@@ -14,5 +14,5 @@ export poster_flag=""
 for region in $regions_list
 do
 echo "******** $region"
-verify_precip.py 20020101.03 20211229.00 --pdfs $write_to_nc_flag $plot_flag $poster_flag --region $region >& ~/std_out/verify_precip.pdfs.${region}.out
+verify_precip.py 20020101 20211229 --pdfs $write_to_nc_flag $plot_flag $poster_flag --region $region >& ~/std_out/verify_precip.pdfs.${region}.out
 done

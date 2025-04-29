@@ -14,5 +14,9 @@ export poster_flag=""
 for region in $regions_list
 do
 echo "******** $region"
-verify_precip.py 20020101.03 20211229.00 --fss $write_to_nc_flag $plot_flag $poster_flag --region $region >& ~/std_out/verify_precip.fss.${region}.out
+# FSS against amount thresholds
+verify_precip.py 20020101 20211229 --fss $write_to_nc_flag $plot_flag $poster_flag --region $region >& ~/std_out/verify_precip.fss.${region}.out
+
+# FSS against pctl thresholds
+verify_precip.py 20020101 20211229 --fss --fss_pctl_threshold $plot_flag $poster_flag --region $region >& ~/std_out/verify_precip.fss_pctl.${region}.out
 done

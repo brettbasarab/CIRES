@@ -113,7 +113,7 @@ def main():
         eval_threshold_list = utils.default_eval_threshold_list_mm
         if args.fss_pctl_threshold:
             is_pctl_threshold = True
-            fixed_threshold = 25.0 # percentile (25th percentile)
+            fixed_threshold = 95.0 # percentile (75th percentile)
             eval_threshold_list = utils.default_eval_threshold_list_pctl
 
         print("**** Calculating FSS")
@@ -135,9 +135,12 @@ def main():
             for time_period_type in time_period_types:
                 print(f"**** Calculating and plotting {time_period_type} aggregated FSS")
                 verif.plot_aggregated_fss(eval_type = "by_radius", xaxis_explicit_values = False,
-                                          time_period_type = time_period_type)
+                                          time_period_type = time_period_type,
+                                          is_pctl_threshold = is_pctl_threshold)
                 verif.plot_aggregated_fss(eval_type = "by_threshold", xaxis_explicit_values = False,
-                                          time_period_type = time_period_type, include_frequency_bias = True)
+                                          time_period_type = time_period_type,
+                                          is_pctl_threshold = is_pctl_threshold,
+                                          include_frequency_bias = True)
 
     # Plot PDFs and CDFs
     if args.pdfs:

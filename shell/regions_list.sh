@@ -10,6 +10,6 @@
 #export regions_list="CONUS US-East US-Central US-Mountain US-WestCoast US-GulfCoast US-SouthEast Africa Australia Europe MaritimeContinent MJO SouthAmerica WestPacJapan Global"
 
 # CUSTOM 
-export regions_list="US-East US-Central US-Mountain US-WestCoast US-GulfCoast US-SouthEast CONUS"
+export regions_list="CONUS US-East US-Central US-Mountain US-WestCoast"
 
 echo $regions_list

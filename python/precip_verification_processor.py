@@ -1222,7 +1222,11 @@ class PrecipVerificationProcessor(object):
 
     ##### Public methods plotting #####
     def plot_aggregated_fss(self, eval_type = evaluate_by_radius_kwarg_str, xaxis_explicit_values = False,
-                            time_period_type = "full_period", include_frequency_bias = False):
+                            time_period_type = "full_period", include_frequency_bias = False, is_pctl_threshold = False):
+        # Not yet plotting frequency bias when using percentile thresolds (because I'm not sure this makese sense)
+        if is_pctl_threshold:
+            include_frequency_bias = False
+
         # Aggregated FSS data to plot
         fss_agg_dict = self.calculate_aggregated_fss(eval_type = eval_type, time_period_type = time_period_type)
 
@@ -1254,9 +1258,15 @@ class PrecipVerificationProcessor(object):
             # Create figure
             short_name = pdp.format_short_name(self.da_dict[self.truth_data_name])
             if (eval_type in evaluate_by_radius_kwarg_options):
-                title = f"FSS vs. radius, {self.region} {short_name} (t = {self.fixed_fss_eval_threshold:0.1f} mm): {dt_str}"
+                if is_pctl_threshold:
+                    fixed_threshold_units = "th pctl"
+                    fixed_threshold_units_no_space = fixed_threshold_units.replace(" ", "_")                    
+                else:
+                    fixed_threshold_units = " mm"
+                    fixed_threshold_units_no_space = fixed_threshold_units.replace(" ", "")
+                title = f"FSS vs. radius, {self.region} {short_name} (t = {self.fixed_fss_eval_threshold:0.1f}{fixed_threshold_units}): {dt_str}"
                 xlabel = f"Evaluation radius ({self.fss_eval_radius_units})" 
-                fig_name = f"FSSradius.{self.data_names_str}thresh{self.fixed_fss_eval_threshold:0.1f}mm.{time_period_type}.{short_name}.{dt_str_ext}.{self.region}.png"
+                fig_name = f"FSSradius.{self.data_names_str}thresh{self.fixed_fss_eval_threshold:0.1f}{fixed_threshold_units_no_space}.{time_period_type}.{short_name}.{dt_str_ext}.{self.region}.png"
                 if xaxis_explicit_values: # Plot explicitly against the selected eval radii or thresholds, with each value evenly spaced on x-axis
                     xaxis_var = np.arange(self.fss_eval_radius_da.shape[0])
                     xticks = self.fss_eval_radius_da.values
@@ -1270,8 +1280,12 @@ class PrecipVerificationProcessor(object):
                     title_prefix += ", frequency bias"
                     figname_prefix += ".freqBias."
                 title = f"{title_prefix} vs. threshold, {self.region} {short_name} (r = {self.fixed_fss_eval_radius:0.2f} {self.fss_eval_radius_units}): {dt_str}"
-                xlabel = "Threshold (mm)" 
-                fig_name = f"{figname_prefix}threshold.{self.data_names_str}radius{self.fixed_fss_eval_radius:0.2f}{self.fss_eval_radius_units}.{time_period_type}.{short_name}.{dt_str_ext}.{self.region}.png"
+                if is_pctl_threshold:
+                    threshold_units = "pctl"
+                else:
+                    threshold_units = "mm"
+                xlabel = f"Threshold ({threshold_units})" 
+                fig_name = f"{figname_prefix}threshold_{threshold_units}.{self.data_names_str}radius{self.fixed_fss_eval_radius:0.2f}{self.fss_eval_radius_units}.{time_period_type}.{short_name}.{dt_str_ext}.{self.region}.png"
                 if xaxis_explicit_values:
                     xaxis_var = np.arange(self.fss_eval_threshold_da.shape[0])
                     xticks = self.fss_eval_threshold_da.values
