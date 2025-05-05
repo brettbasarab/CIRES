@@ -760,14 +760,18 @@ class PrecipVerificationProcessor(object):
                       time_period_type = "full_period",
                       radius_units = "deg", # For degrees lat/lon; otherwise km, etc.
                       is_pctl_threshold = False,
-                      write_to_nc = False
-                      ):
+                      include_zeros = True,
+                      write_to_nc = False):
         # Process time_period_type: list of date times, dimension name, etc.
         dtimes, dim_name, time_period_str = self._process_time_period_type_to_dtimes(time_period_type)
         self.fss_eval_radius_units = radius_units
 
         if (eval_type in evaluate_by_radius_kwarg_options):
-            print(f"Calculating FSS by radius (fixed accum threshold {fixed_threshold} mm)")
+            if is_pctl_threshold:
+                threshold_units = "th pctl"
+            else:
+                threshold_units = " mm"
+            print(f"Calculating FSS by radius (fixed threshold {fixed_threshold}{threshold_units})")
             self.fixed_fss_eval_threshold = fixed_threshold
             
             self.fss_eval_radius_da = xr.DataArray(np.array(eval_radius_list))
@@ -777,7 +781,7 @@ class PrecipVerificationProcessor(object):
             fss_data_dim_name = "radius"
             stat_type = f"fss.by_radius.thresh{self.fixed_fss_eval_threshold:0.1f}mm"
         else: # If anything except evaluate_by_radius_kwarg_options is passed for <eval_type>, evaluate against threshold
-            print(f"Calculatimg FSS by accumulation threshold (fixed eval radius {fixed_radius} {self.fss_eval_radius_units})")
+            print(f"Calculatimg FSS by threshold (fixed eval radius {fixed_radius} {self.fss_eval_radius_units})")
             self.fixed_fss_eval_radius = fixed_radius
 
             self.fss_eval_threshold_da = xr.DataArray(np.array(eval_threshold_list))
@@ -803,12 +807,12 @@ class PrecipVerificationProcessor(object):
                 if (eval_type in evaluate_by_radius_kwarg_options):
                     for radius in eval_radius_list:
                         FSS = self._calculate_fss_single_grid(qpf, qpe, radius, grid_cell_size, fixed_threshold,
-                                                              is_pctl_threshold = is_pctl_threshold)
+                                                              is_pctl_threshold = is_pctl_threshold, include_zeros = include_zeros)
                         fss_list.append(FSS)
                 else:
                     for threshold in eval_threshold_list:
                         FSS = self._calculate_fss_single_grid(qpf, qpe, fixed_radius, grid_cell_size, threshold,
-                                                              is_pctl_threshold = is_pctl_threshold)
+                                                              is_pctl_threshold = is_pctl_threshold, include_zeros = include_zeros)
                         fss_list.append(FSS)
     
                 fss_tmp_array = np.array(fss_list).reshape((1, fss_data_coords.shape[0]))
@@ -1141,15 +1145,22 @@ class PrecipVerificationProcessor(object):
     # Calculate FSS for a single spatial grid (i.e., at a single valid time).
     # Code from Craig Schwartz via Trevor Alcott. See 20250130 email from Trevor
     # which is part of thread entitled "Experience with fractions skill score?"
-    def _calculate_fss_single_grid(self, qpf, qpe, radius, grid_cell_size, threshold, is_pctl_threshold = False):
+    # FIXME (potentially): how are NaNs being handled. I think they are being converted to zeros by _mask_data_array_based_on_threshold
+    # which may not be desirable. We should keep them as NaNs, but then how will that affect the FSS calculation here?
+    def _calculate_fss_single_grid(self, qpf, qpe, radius, grid_cell_size, threshold,
+                                   is_pctl_threshold = False, include_zeros = True):
         # Calculate footprint, i.e., evaluation area
         footprint = self._get_footprint_for_fss(radius, grid_cell_size)
-
+       
         # Convert qpf and qpe arrays to numpy arrays containing 1s and 0s based on
         # whether precipitation amount is at or above (set to 1) or below (set to 0) <threshold>.
         if is_pctl_threshold:
-            threshold_amount_qpf = qpf.quantile(threshold/100.0) 
-            threshold_amount_qpe = qpe.quantile(threshold/100.0)
+            if not(include_zeros):
+                threshold_amount_qpf = qpf.where(qpf > 0.0).quantile(threshold/100.0)
+                threshold_amount_qpe = qpe.where(qpe > 0.0).quantile(threshold/100.0)
+            else:
+                threshold_amount_qpf = qpf.quantile(threshold/100.0) 
+                threshold_amount_qpe = qpe.quantile(threshold/100.0)
             binary_qpf = self._mask_data_array_based_on_threshold(qpf, threshold_amount_qpf)
             binary_qpe = self._mask_data_array_based_on_threshold(qpe, threshold_amount_qpe)
         else: 
@@ -1215,7 +1226,7 @@ class PrecipVerificationProcessor(object):
         if (agg_type is not None):
             main_prefix += f".{agg_type}"
         
-        fname = f"{main_prefix}.{ime_period_str}.{self.region}.nc"
+        fname = f"{main_prefix}.{time_period_str}.{self.region}.nc"
         fpath = os.path.join(nc_dir, fname)
         return fpath
     ##### END Private methods to support stats calculations #####

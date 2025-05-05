@@ -32,6 +32,8 @@ def main():
                         help = "List of data names to verify; pass space-separated with the truth data name listed first; if None, all possible datasets for the given region are verified")
     parser.add_argument("--grid_cell_size", dest = "grid_cell_size", type = float, default = utils.replay_grid_cell_size, 
                         help = f"Assumed grid cell size for FSS and other calculations; default Replay grid cell size of {utils.replay_grid_cell_size} degrees")
+    parser.add_argument("--time_period_types", dest = "time_period_types", default = ["full_period", "common_seasonal", "common_monthly"], nargs = "+", 
+                        help = "Time period types over which to perform analysis; default ['full_period', 'common_seasonal', 'common_monthly']")
     parser.add_argument("--high_res", dest = "high_res", action = "store_true", default = False,
                         help = "Set to verify CONUS high-resolution datasets (AORC, CONUS404, NestedReplay, etc.)")
     # Statistics flags: set which statistic(s) to calculated
@@ -77,9 +79,8 @@ def main():
 
     # Calculate data for and plot contour maps of specified statistics valid at each grid point (so
     # contour maps can be made of the resulting data) and across various aggregation time periods.
-    time_period_types = ["full_period", "common_seasonal", "common_monthly"] 
     if args.cmaps:
-        for time_period_type in time_period_types: 
+        for time_period_type in args.time_period_types: 
             print(f"**** Calculating {time_period_type} aggregated data for contour maps")
             # Mean
             agg_dict = verif.calculate_aggregated_stats(time_period_type = time_period_type, stat_type = "mean", agg_type = "time", write_to_nc = args.write_to_nc)
@@ -122,17 +123,19 @@ def main():
         fss_dict_by_radius = verif.calculate_fss(eval_type = "by_radius", grid_cell_size = args.grid_cell_size,
                                                  fixed_threshold = fixed_threshold, 
                                                  eval_radius_list = eval_radius_list,
-                                                 is_pctl_threshold = is_pctl_threshold, 
+                                                 is_pctl_threshold = is_pctl_threshold,
+                                                 include_zeros = False,
                                                  write_to_nc = args.write_to_nc)
         fss_dict_by_thresh = verif.calculate_fss(eval_type = "by_threshold", grid_cell_size = args.grid_cell_size,
                                                  fixed_radius = 2 * args.grid_cell_size,
                                                  eval_threshold_list = eval_threshold_list,
                                                  is_pctl_threshold = is_pctl_threshold,
+                                                 include_zeros = False,
                                                  write_to_nc = args.write_to_nc)
 
         # Plot FSS, averaged across evaluation period 
         if args.plot:
-            for time_period_type in time_period_types:
+            for time_period_type in args.time_period_types:
                 print(f"**** Calculating and plotting {time_period_type} aggregated FSS")
                 verif.plot_aggregated_fss(eval_type = "by_radius", xaxis_explicit_values = False,
                                           time_period_type = time_period_type,
@@ -144,7 +147,7 @@ def main():
 
     # Plot PDFs and CDFs
     if args.pdfs:
-        for time_period_type in time_period_types:
+        for time_period_type in args.time_period_types:
             print(f"**** Calculating {time_period_type} PDFs and CDFs")
             pdf_dict = verif.calculate_pdf(time_period_type = time_period_type, write_to_nc = args.write_to_nc)
             if args.plot:
