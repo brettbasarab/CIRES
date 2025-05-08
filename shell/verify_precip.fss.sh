@@ -19,4 +19,7 @@ verify_precip.py 20020101 20211229 --fss $write_to_nc_flag $plot_flag $poster_fl
 
 # FSS against pctl thresholds
 verify_precip.py 20020101 20211229 --fss --fss_pctl_threshold $plot_flag $poster_flag --region $region >& ~/std_out/verify_precip.fss_pctl.${region}.out
+
+# FSS against ARI grids
+verify_precip.py 20020101 20211229 --fss --fss_ari_grids $plot_flag $poster_flag --region $region >& ~/std_out/verify_precip.fss_ari.${region}.out 
 done

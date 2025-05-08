@@ -52,14 +52,23 @@ replay_grid_cell_size = 0.234375
 # AORC native grid cell size in degrees
 aorc_grid_cell_size = 0.033332
 
-# Default list of evaluation radii for FSS (in number of grid cells)
-default_fss_eval_radius_list_grid_cells = np.array([1, 2, 3, 4, 6, 8, 12, 20, 40, 80])
+# Radius, ARIs (in years), amount, and percentile thresholds for various
+# types of evaluations; typically used for FSS and occurence stats (like frequency bias)
 
-# Default list of evaluation thresholds for FSS and occurence stats (in mm)
-default_eval_threshold_list_mm = [1.0, 2.0, 5.0, 10.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 70.0, 75.0, 80.0, 90.0, 100.0]
+# Default list of evaluation radii (number of grid cells)
+default_eval_radius_list_grid_cells = np.array([1, 2, 3, 4, 6, 8, 12, 20, 40, 80])
 
-# Default list of percentile evaluation thresholds for FSS and occurence stats
-default_eval_threshold_list_pctl = [5.0, 10.0, 25.0, 50.0, 75.0, 90.0, 95.0, 99.0, 99.9]
+# Default list of evaluation radii (degrees latitude/longitude) 
+default_eval_radius_list_deg = np.array([0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0, 20.0])
+
+# Default list of evaluation thresholds (mm)
+default_eval_threshold_list_mm = np.array([1.0, 2.0, 5.0, 10.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 70.0, 75.0, 80.0, 90.0, 100.0])
+
+# Default list of percentile evaluation thresholds
+default_eval_threshold_list_pctl = np.array([5.0, 10.0, 25.0, 50.0, 75.0, 90.0, 95.0, 99.0, 99.9])
+
+# Default list of ARI grids to use as thresholds (years) 
+default_eval_ari_list_years = np.array([1, 2, 5, 10, 25, 50, 100])
 
 # DATA DIRECTORY PATHS 
 #################################################################################
