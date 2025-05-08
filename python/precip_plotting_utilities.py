@@ -547,8 +547,56 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
 
     return axes_list, cbar_ax
 
+# Add time dimension (if there isn't one) and short_name attribute
+# to data array, so the plotting functions below can plot it.
+# NOTE: Mean to be a temporary fix; should change the plotting functions
+# themselves to work with data without a time dimension (i.e., a single grid).
+def format_data_array_for_plotting(data_array):
+    data_array = data_array.expand_dims(dim = {"time": [pd.Timestamp.now()]}, axis = 0)
+    data_array.attrs["short_name"] = "24 hour precipitation"
+
+    return data_array 
+
+def prepare_mesh_grids_for_contourf(data_array):
+    if ("lon" in data_array.coords):
+        lon_array = data_array.lon
+    elif ("longitude" in data_array.coords):
+        lon_array = data_array.longitude
+    else:
+        print(f"Error: Can't find longitude dimension in {data_array.coords}")
+        sys.exit(1)
+
+    if ("lat" in data_array.coords):
+        lat_array = data_array.lat
+    elif ("latitude" in data_array.coords):
+        lat_array = data_array.latitude
+    else:
+        print(f"Error: Can't find latitude dimension in {data_array.coords}")
+        sys.exit(1)
+
+    if (len(lon_array.shape) != len(lat_array.shape)):
+        print(f"Error: Shapes of longitude {lon_array.shape} and latitude {lat_array.shape} arrays don't match; can't plot with contourf")
+        sys.exit(1)
+
+    if (len(lon_array.shape) == 1): 
+        return np.meshgrid(lon_array, lat_array)
+    elif (len(lon_array.shape) == 2):
+        return lon_array, lat_array 
+    else:
+        print(f"Error: Latitude/longitude array shape is {lon_array.shape}; must have 1 or 2 dimensions to plot using contourf")
+        sys.exit(1)
+
+# TODO (plotting functions):
+    # Add coastlines, cartopy features in a function since this code is reused several times.
+    # Generalize plotting to handle arrays with multi-dimensional coordinates (need, e.g., x = "longitude", y = "latitude"). 
+    # Generalize to be able to plot 3-D arrays with a time dimension (one plot for each time) and 2-D arrays (one grid only).
+    # Generalize how time dimension is selected from 3-D arrays: .loc?; .sel?; how to generalize the dimension name?
+    # Potentially combine plot_cmap_multi_panel and plot_cmap_single_panel: the latter is just a "multi-panel" plot with one panel.
+    # Remove plot_conus404_native_grid since its functionality will become generalized in the other functions.
+
 # For each time in the data array, create a single-paneled contour plot of precipitation
-def plot_cmap_single_panel(data_array, data_name, region, temporal_res = "native", use_contourf = True, sparse_cbar_ticks = False,
+def plot_cmap_single_panel(data_array, data_name, region, plot_levels,
+                           temporal_res = "native", use_contourf = True, sparse_cbar_ticks = False,
                            proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP):
     match proj_name:
         case "LambertConformal":
@@ -562,7 +610,7 @@ def plot_cmap_single_panel(data_array, data_name, region, temporal_res = "native
     dtimes = [pd.Timestamp(i) for i in data_array[time_dim].values]
     for dtime in dtimes:
         # Select data to plot (at one valid time)
-        data_to_plot = data_array.sel(period_end_time = dtime)
+        data_to_plot = data_array.sel(time = dtime)
 
         # Set figure title and name
         formatted_short_name = precip_data_processors.format_short_name(data_to_plot)
@@ -581,33 +629,22 @@ def plot_cmap_single_panel(data_array, data_name, region, temporal_res = "native
                             linewidth = 0.5, linestyle = "dashed")
         
         # Plot the data
-        levels = variable_plot_limits(utils.accum_precip_var_name, temporal_res = temporal_res)
         if use_contourf:
-            if (len(data_to_plot["lon"].shape) != len(data_to_plot["lat"].shape)):
-                print(f"Error: Shapes of longitude {data_to_plot['lon'].shape} and latitude {data_to_plot['lat'].shape} arrays don't match; can't plot with contourf")
-                sys.exit(1)
-
-            if (len(data_to_plot["lon"].shape) == 1): 
-                lon_mesh, lat_mesh = np.meshgrid(data_to_plot["lon"], data_to_plot["lat"])
-            elif (len(data_to_plot["lon"].shape) == 2):
-                lon_mesh, lat_mesh = data_to_plot["lon"], data_to_plot["lat"]
-            else:
-                print(f"Error: Latitude/longitude array shape is {data_to_plot['lon'].shape}; must have 1 or 2 dimensions to plot using contourf")
-                sys.exit(1)
- 
-            plot_handle = axis.contourf(lon_mesh, lat_mesh, data_to_plot, levels = levels, extend = "both", transform = data_proj, cmap = cmap)
+            lon_mesh, lat_mesh = prepare_mesh_grids_for_contourf(data_to_plot)
+            plot_handle = axis.contourf(lon_mesh, lat_mesh, data_to_plot, levels = plot_levels, extend = "both", transform = data_proj, cmap = cmap)
             plt.colorbar(plot_handle, orientation = "vertical", shrink = 0.7)
-            plot_handle.colorbar.ax.set_yticks(levels)
+            plot_handle.colorbar.ax.set_yticks(plot_levels)
         else:
-            plot_handle = data_to_plot.plot(ax = axis, levels  = levels, extend = "max", transform = data_proj, cmap = cmap,
-                                            cbar_kwargs = {"orientation": "vertical", "shrink": 0.7, "ticks": levels})
+            plot_handle = data_to_plot.plot(ax = axis, levels  = plot_levels, extend = "max", transform = data_proj, cmap = cmap,
+                                            x = "longitude", y = "latitude",
+                                            cbar_kwargs = {"orientation": "vertical", "shrink": 0.7, "ticks": plot_levels})
         
         # Configure axis labels, colorbar, and figure name
         plot_handle.colorbar.set_label(f"{data_array.short_name} [{data_array.units}]", size = 15)
         if sparse_cbar_ticks:
-            cbar_tick_labels = create_sparse_cbar_ticks(levels) 
+            cbar_tick_labels = create_sparse_cbar_ticks(plot_levels) 
         else:
-            cbar_tick_labels = levels    
+            cbar_tick_labels = plot_levels    
         plot_handle.colorbar.ax.set_yticklabels(cbar_tick_labels)
         plot_handle.colorbar.ax.tick_params(labelsize = 15)
         plt.title(f"{data_name} {data_array.short_name} ending at {valid_dt_str}", fontsize = 15)
@@ -627,7 +664,7 @@ def plot_cmap_single_panel(data_array, data_name, region, temporal_res = "native
         plt.savefig(fig_path)
 
 # Contour maps with the correct number of panels, with the "truth" dataset always in the top left
-def plot_cmap_multi_panel(data_dict, region, truth_data_name, plot_levels, 
+def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels, 
                           use_contourf = False, sparse_cbar_ticks = False,
                           single_colorbar = True, cmap = DEFAULT_PRECIP_CMAP):
     # Configure basic info about the data
@@ -635,13 +672,13 @@ def plot_cmap_multi_panel(data_dict, region, truth_data_name, plot_levels,
     num_da = len(data_dict.items())
     data_names_str = "".join(f"{key}." for key in data_dict.keys())
 
-    # Set map projection to be used for all subplots in the figure 
-    proj = ccrs.PlateCarree()
-
     if (num_da >= 5):
         figsize = regions_info_dict[region].figsize_mp_5plus
     else:
         figsize = regions_info_dict[region].figsize_mp
+
+    # Set map projection to be used for all subplots in the figure 
+    proj = ccrs.PlateCarree()
 
     # Loop through these datetimes, making figures with subplots corresponding to each of the data arrays in data_dict
     time_dim = get_time_dimension_name(truth_da)
@@ -673,8 +710,12 @@ def plot_cmap_multi_panel(data_dict, region, truth_data_name, plot_levels,
 
             # One colorbar for entire figure; add as its own separate axis defined using subplot2grid 
             if single_colorbar:
-                plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
-                                                add_colorbar = not(single_colorbar))
+                if use_contourf:
+                    lon_mesh, lat_mesh = prepare_mesh_grids_for_contourf(data_to_plot)
+                    plot_handle = axis.contourf(lon_mesh, lat_mesh, data_to_plot[0,:,:], levels = plot_levels, extend = "both", transform = proj, cmap = cmap)
+                else:
+                    plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
+                                                    add_colorbar = not(single_colorbar))
                 cbar = fig.colorbar(plot_handle, cax = cbar_ax, ticks = plot_levels, shrink = 0.5, orientation = "horizontal")
                 cbar.set_label(da.units, size = 15)
                 cbar_tick_labels_rotation, cbar_tick_labels_fontsize = set_cbar_labels_rotation_and_fontsize(plot_levels, region, num_da, for_single_cbar = True)
@@ -682,13 +723,18 @@ def plot_cmap_multi_panel(data_dict, region, truth_data_name, plot_levels,
                 cbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
             # Separate colorbar for each subplot
             else:
-                plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
-                                                cbar_kwargs = {"shrink": 0.6, "ticks": plot_levels, "pad": 0.02, "orientation": "horizontal"})
-                plot_handle.colorbar.set_label(da.units, size = 15, labelpad = -1.3)
-                cbar_tick_labels = create_sparse_cbar_ticks(plot_levels) # 20241126: Label every other tick on subplot colorbars
-                cbar_tick_labels_rotation, cbar_tick_labels_fontsize = set_cbar_labels_rotation_and_fontsize(cbar_tick_labels, region, num_da, for_single_cbar = False)
-                plot_handle.colorbar.ax.set_xticklabels(cbar_tick_labels, rotation = cbar_tick_labels_rotation) 
-                plot_handle.colorbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
+                if use_contourf:
+                    plot_handle = axis.contourf(lon_mesh, lat_mesh, data_to_plot[0,:,:], levels = plot_levels, extend = "both", transform = proj, cmap = cmap)
+                    axis.colorbar(plot_handle, orientation = "vertical", shrink = 0.7)
+                    plot_handle.colorbar.ax.set_yticks(plot_levels)
+                else:
+                    plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
+                                                    cbar_kwargs = {"shrink": 0.6, "ticks": plot_levels, "pad": 0.02, "orientation": "horizontal"})
+                    plot_handle.colorbar.set_label(da.units, size = 15, labelpad = -1.3)
+                    cbar_tick_labels = create_sparse_cbar_ticks(plot_levels) # 20241126: Label every other tick on subplot colorbars
+                    cbar_tick_labels_rotation, cbar_tick_labels_fontsize = set_cbar_labels_rotation_and_fontsize(cbar_tick_labels, region, num_da, for_single_cbar = False)
+                    plot_handle.colorbar.ax.set_xticklabels(cbar_tick_labels, rotation = cbar_tick_labels_rotation) 
+                    plot_handle.colorbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
 
             gl = axis.gridlines(crs = proj, color = "gray", alpha = 0.5, draw_labels = False,
                                 linewidth = 0.5, linestyle = "dashed")
