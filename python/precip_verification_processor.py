@@ -423,7 +423,8 @@ class PrecipVerificationProcessor(object):
     ##### PUBLIC METHODS #####
     ############################################################################
     ##### Public methods stats calculations #####
-    # Calculate occurence statistics
+    # Calculate occurrence statistics over entire forecast and obs datasets (i.e., the stats will be derived
+    # from grids that are valid in time and space).
     def calculate_occ_stats(self, input_da_dict = None,
                             threshold_list = utils.default_eval_threshold_list_mm): 
         if (input_da_dict is None):
@@ -581,17 +582,6 @@ class PrecipVerificationProcessor(object):
         correct_negatives_condition = (model_precip < threshold) & (obs_precip < threshold)
         number_of_correct_negatives = len(np.where(correct_negatives_condition.values.flatten())[0])
         return number_of_correct_negatives
-
-    # Calculate frequency bias
-    def calculate_frequency_bias(self, threshold, model_precip, obs_precip):
-        hits = self.calculate_hits(self, threshold, model_precip, obs_precip)
-        misses = self.calculate_misses(self, threshold, model_precip, obs_precip)
-        false_alarms = self.calculate_false_alarms(self, threshold, model_precip, obs_precip)
-
-        if (hits + misses > 0):
-            return (hits + false_alarms)/(hits + misses)
-        else:
-            return np.nan 
 
     # Calculate statistics valid for data aggregated in space, time, or space and time. Currently
     # only mean and percentile stats are supported. 
@@ -967,7 +957,6 @@ class PrecipVerificationProcessor(object):
             dtimes = self._construct_season_dt_ranges(data_array)
         
         occ_stats_agg_dict = {}
-        obs_da = self._convert_period_end_to_period_begin(self.truth_da)
         for dtime in dtimes:
             da_dict_each_dtime = {}
             for data_name, data_array in self.da_dict.items(): 
