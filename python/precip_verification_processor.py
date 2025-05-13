@@ -784,16 +784,16 @@ class PrecipVerificationProcessor(object):
             stat_type = f"fss.by_radius.thresh{self.fixed_fss_eval_threshold:0.1f}mm"
         elif (eval_type == evaluate_by_radius_ari_threshold_kw_str):
             print(f"**** Calculating FSS by radius, using {fixed_ari_threshold:02d}-year ARI grid as threshold")
-            self.fixed_fss_ari_eval_threshold = fixed_ari_threshold
+            self.fixed_fss_eval_threshold = fixed_ari_threshold
 
             self.fss_eval_radius_da = xr.DataArray(eval_radius_list)
             pdp.add_attributes_to_data_array(self.fss_eval_radius_da, units = self.fss_eval_radius_units)
             fss_data_coords = self.fss_eval_radius_da 
             
             fss_data_dim_name = "radius"
-            stat_type = f"fss.by_radius.thresh{self.fixed_fss_ari_eval_threshold:02d}_year_ari"
+            stat_type = f"fss.by_radius.thresh{self.fixed_fss_eval_threshold:02d}_year_ari"
 
-            fixed_ari_grid = self._open_ari_threshold_grid(self.fixed_fss_ari_eval_threshold)
+            fixed_ari_grid = self._open_ari_threshold_grid(self.fixed_fss_eval_threshold)
         elif (eval_type == evaluate_by_ari_kw_str):
             print(f"**** Calculating FSS by ARI grid threshold (fixed eval radius {fixed_radius} {self.fss_eval_radius_units})")
             self.fixed_fss_eval_radius = fixed_radius
@@ -821,17 +821,26 @@ class PrecipVerificationProcessor(object):
             stat_type = f"fss.by_threshold.radius{self.fixed_fss_eval_radius:0.1f}{self.fss_eval_radius_units}"
 
         da_dict_fss = {}
+        da_dict_f_model = {}
         for data_name, da in self.da_dict.items():
-            if (data_name == self.truth_data_name):
-                continue
-            
             print(f"Calculating FSS for dataset {data_name}")
+            f_obs_list = []
+            f_model_list = []
             for v, valid_dt in enumerate(self.valid_dt_list):
                 valid_dt_str = f"{valid_dt:%Y-%m-%d %H:%M:%S}"
-                qpf = da.sel(period_end_time = valid_dt_str)
                 qpe = self.truth_da.sel(period_end_time = valid_dt_str)
 
+                # For the observations grid (truth dataset), calculate the F_obs values only 
+                # (fractions of observed grid exceeding threshold)
+                if (data_name == self.truth_data_name) and \
+                ((eval_type in evaluate_by_radius_kw_options) or (eval_type == evaluate_by_radius_ari_threshold_kw_str)):
+                    binary_qpe = self._mask_data_array_based_on_threshold(qpe, self.fixed_fss_eval_threshold)
+                    F_obs = np.where(binary_qpe)[0].shape[0]/binary_qpe.flatten().shape[0]
+                    f_obs_list.append(F_obs)
+                    continue
+
                 # Calculate FSS for varying evaluation radius, fixed threshold
+                qpf = da.sel(period_end_time = valid_dt_str)
                 fss_list = []
                 if (eval_type in evaluate_by_radius_kw_options):
                     for radius in eval_radius_list:
@@ -858,10 +867,31 @@ class PrecipVerificationProcessor(object):
                 else:
                     fss_array = np.concatenate((fss_array, fss_tmp_array), axis = 0)
 
-            # Convert numpy array to DataArray
+                # Calculate frequency-related values based on the binary qpf and qpe fields
+                # F_obs = fraction of observed points exceeding threshold over whole domain
+                # F_model = fraction of forecast/model points exceeding threshold over whole domain
+                # These values in turn are used to calculate AFSS, FSS_uniform, etc
+                # Only do this for by_radius evaluations, since that's the context in which it  is most useful. 
+                if (eval_type in evaluate_by_radius_kw_options) or (eval_type == evaluate_by_radius_ari_threshold_kw_str):
+                    binary_qpf = self._mask_data_array_based_on_threshold(qpf, self.fixed_fss_eval_threshold)
+                    F_model = np.where(binary_qpf)[0].shape[0]/binary_qpf.flatten().shape[0]
+                    f_model_list.append(F_model)
+
+            # Convert numpy arrays to DataArrays
+            if (data_name == self.truth_data_name) and \
+            ((eval_type in evaluate_by_radius_kw_options) or (eval_type == evaluate_by_radius_ari_threshold_kw_str)):
+                    self.f_obs_da = xr.DataArray(f_obs_list, coords = [self.valid_dt_list], dims = [utils.period_end_time_dim_str])
+                    self.f_obs_da.name = "observed_fractions"
+                    continue
+
             fss_da = xr.DataArray(fss_array, coords = [self.valid_dt_list, fss_data_coords], dims = [utils.period_end_time_dim_str, fss_data_dim_name])
             fss_da.name = "fss" 
-            da_dict_fss[data_name] = fss_da 
+            da_dict_fss[data_name] = fss_da
+            
+            if (eval_type in evaluate_by_radius_kw_options) or (eval_type == evaluate_by_radius_ari_threshold_kw_str):
+                f_model_da = xr.DataArray(f_model_list, coords = [self.valid_dt_list], dims = [utils.period_end_time_dim_str])
+                f_model_da.name = "forecast_fractions"
+                da_dict_f_model[data_name] = f_model_da
 
             # Output to netCDF
             if write_to_nc:
@@ -871,10 +901,9 @@ class PrecipVerificationProcessor(object):
 
         # Here I decided to add the FSS dictionary as an attribute of the class
         # This will make it easier to access and manipulate the data in the dictionary in other methods.
-        if (eval_type in evaluate_by_radius_kw_options):
+        if (eval_type in evaluate_by_radius_kw_options) or (eval_type == evaluate_by_radius_ari_threshold_kw_str):
             self.fss_dict_by_radius = da_dict_fss
-        elif (eval_type == evaluate_by_radius_ari_threshold_kw_str):
-            self.fss_dict_by_radius_ari_threshold = da_dict_fss
+            self.f_model_dict = da_dict_f_model
         elif (eval_type == evaluate_by_ari_kw_str):
             self.fss_dict_by_ari = da_dict_fss
         else:
@@ -884,22 +913,19 @@ class PrecipVerificationProcessor(object):
 
     def calculate_aggregated_fss(self, external_fss_dict = None, eval_type = evaluate_by_radius_kw_str, time_period_type = "full_period"):
         if (external_fss_dict is not None):
-            if (eval_type in evaluate_by_radius_kw_options):
+            if (eval_type in evaluate_by_radius_kw_options) or (eval_type == evaluate_by_radius_ari_threshold_kw_str):
                 self.fss_eval_radius_da = external_fss_dict[self.data_names[-1]].radius
                 self.fss_dict_by_radius = external_fss_dict
                 da_dict_fss = self.fss_dict_by_radius
             elif (eval_type == evaluate_by_ari_kw_str):
                 self.fss_eval_ari_da = external_fss_dict[self.data_names[-1]].ARI
                 da_dict_fss = self.fss_dict_by_ari
-            elif (eval_type == evaluate_by_radius_ari_threshold_kw_str):
-                self.fss_eval_radius_da = external_fss_dict[self.data_names[-1]].radius
-                self.fss_dict_by_radius = external_fss_dict
             else:
                 self.fss_eval_threshold_da = external_fss_dict[self.data_names[-1]].threshold
                 self.fss_dict_by_threshold = external_fss_dict
                 da_dict_fss = self.fss_dict_by_threshold 
         else:
-            if (eval_type in evaluate_by_radius_kw_options):
+            if (eval_type in evaluate_by_radius_kw_options) or (eval_type == evaluate_by_radius_ari_threshold_kw_str):
                 if not(hasattr(self, "fss_dict_by_radius")):
                     print("Error: You need to calculate FSS over varying evaluation radii first to perform aggregation")
                     return
@@ -909,11 +935,6 @@ class PrecipVerificationProcessor(object):
                     print("Error: You need to calculate FSS over varying ARI grids first to perform aggregation")
                     return
                 da_dict_fss = self.fss_dict_by_ari
-            elif (eval_type == evaluate_by_radius_ari_threshold_kw_str):
-                if not(hasattr(self, "fss_dict_by_radius_ari_threshold")):
-                    print("Error: You need to calculate FSS over varying evaluation radii first, using ARI grid as threshold, to perform aggregation")
-                    return
-                da_dict_fss = self.fss_dict_by_radius_ari_threshold
             else:
                 if not(hasattr(self, "fss_dict_by_threshold")):
                     print("Error: You need to calculate FSS over varying thresholds first to perform aggregation")
@@ -929,8 +950,12 @@ class PrecipVerificationProcessor(object):
             dtimes = self._construct_season_dt_ranges(data_array)
         
         fss_agg_dict = {}
+        afss_agg_dict = {}
+        fss_uniform_agg_dict = {}
         for dtime in dtimes:
             da_dict_fss_each_dtime = {}
+            da_dict_afss_each_dtime = {}
+            da_dict_fss_uniform_each_dtime = {}
             for data_name, data_array in da_dict_fss.items():
                 if (data_name == self.truth_data_name):
                     continue
@@ -942,9 +967,29 @@ class PrecipVerificationProcessor(object):
 
                 da_dict_fss_each_dtime[data_name] = data
 
-            fss_agg_dict[dtime] = da_dict_fss_each_dtime
+                # Calculate AFSS and FSS_uniform (useful for plotting of by-radius aggregated FSS results)
+                if (eval_type in evaluate_by_radius_kw_options) or (eval_type == evaluate_by_radius_ari_threshold_kw_str):
+                    f_obs_da = self._convert_period_end_to_period_begin(self.f_obs_da)
+                    f_model_da = self._convert_period_end_to_period_begin(self.f_model_dict[data_name])
+                    
+                    afss_da = (2 * f_obs_da * f_model_da)/(f_obs_da**2 + f_model_da**2)
+                    fss_uniform_da = 0.5 * (1 + f_obs_da)
 
-        return fss_agg_dict 
+                    afss_data_to_aggregate = self._determine_agg_data_from_time_period_type(afss_da, time_period_type, dtime)
+                    fss_uniform_data_to_aggregate = self._determine_agg_data_from_time_period_type(fss_uniform_da, time_period_type, dtime)
+
+                    afss_data = afss_data_to_aggregate.mean().item()
+                    fss_uniform_data = fss_uniform_data_to_aggregate.mean().item()
+
+                    da_dict_afss_each_dtime[data_name] = afss_data
+                    da_dict_fss_uniform_each_dtime[data_name] = fss_uniform_data
+
+            fss_agg_dict[dtime] = da_dict_fss_each_dtime
+            if  (eval_type in evaluate_by_radius_kw_options) or (eval_type == evaluate_by_radius_ari_threshold_kw_str):
+                afss_agg_dict[dtime] = da_dict_afss_each_dtime
+                fss_uniform_agg_dict[dtime] = da_dict_fss_uniform_each_dtime
+
+        return fss_agg_dict, afss_agg_dict, fss_uniform_agg_dict 
 
     # Calculated occurence statistics aggregated over specified time periods (common monthly, common seasonal, etc.)
     def calculate_aggregated_occ_stats(self, which_stat, time_period_type = "full_period"):
@@ -1304,13 +1349,14 @@ class PrecipVerificationProcessor(object):
 
     ##### Public methods plotting #####
     def plot_aggregated_fss(self, eval_type = evaluate_by_radius_kw_str, xaxis_explicit_values = False,
-                            time_period_type = "full_period", include_frequency_bias = False, is_pctl_threshold = False):
+                            time_period_type = "full_period", include_frequency_bias = False, is_pctl_threshold = False,
+                            include_fss_uniform = True):
         # Not yet plotting frequency bias when using percentile thresolds (because I'm not sure this makese sense)
         if is_pctl_threshold:
             include_frequency_bias = False
 
         # Aggregated FSS data to plot
-        fss_agg_dict = self.calculate_aggregated_fss(eval_type = eval_type, time_period_type = time_period_type)
+        fss_agg_dict, afss_agg_dict, fss_uniform_agg_dict = self.calculate_aggregated_fss(eval_type = eval_type, time_period_type = time_period_type)
 
         # Frequency bias data to plot (done for plotting against thresholds, only)
         if (include_frequency_bias) and (eval_type not in evaluate_by_radius_kw_options):
@@ -1358,9 +1404,9 @@ class PrecipVerificationProcessor(object):
                     xaxis_var = self.fss_eval_radius_da 
                     xticks = np.arange(0, xaxis_var[-1] + 1, 1)
             elif (eval_type == evaluate_by_radius_ari_threshold_kw_str): 
-                title = f"FSS vs. radius, {self.region} {short_name} (t = {self.fixed_fss_ari_eval_threshold:02d} year ARI): {dt_str}"
+                title = f"FSS vs. radius, {self.region} {short_name} (t = {self.fixed_fss_eval_threshold:02d} year ARI): {dt_str}"
                 xlabel = f"Evaluation radius ({self.fss_eval_radius_units})" 
-                fig_name = f"FSSradius.{self.data_names_str}thresh{self.fixed_fss_ari_eval_threshold:02d}year_ari.{time_period_type}.{short_name}.{dt_str_ext}.{self.region}.png"
+                fig_name = f"FSSradius.{self.data_names_str}thresh{self.fixed_fss_eval_threshold:02d}year_ari.{time_period_type}.{short_name}.{dt_str_ext}.{self.region}.png"
                 if xaxis_explicit_values: # Plot explicitly against the selected eval radii or thresholds, with each value evenly spaced on x-axis
                     xaxis_var = np.arange(self.fss_eval_radius_da.shape[0])
                     xticks = self.fss_eval_radius_da.values
@@ -1439,9 +1485,14 @@ class PrecipVerificationProcessor(object):
                         continue
                     axis.plot(xaxis_var, da, linewidth = 2, label = data_name,
                              color = pputils.time_series_color_dict[data_name])
+                if (include_fss_uniform) and \
+                (subplot_title == "FSS") and \
+                ((eval_type in evaluate_by_radius_kw_options) or (eval_type == evaluate_by_radius_ari_threshold_kw_str)):
+                    fss_uniform = fss_uniform_agg_dict[dtime][self.data_names[-1]]
+                    axis.plot([0, xticks[-1]], [fss_uniform, fss_uniform], linewidth = 3, color = "black", linestyle = "dashed") 
                 if (include_frequency_bias) and (eval_type not in evaluate_by_radius_kw_options):
                     axis.set_title(subplot_title, fontsize = 15)
-                    if (ylabel == "Frequency Bias"): # If we're working on the frequency bias axis, add a line at bias = 1 (unbiased forecast)
+                    if (subplot_title == "Frequency Bias"): # If we're working on the frequency bias axis, add a line at bias = 1 (unbiased forecast)
                         axis.plot([0, xaxis_var[-1]], [1, 1], linewidth = 3, color = "black") 
                 axis.legend(loc = "best", prop = {"size": 15})
 
