@@ -3,7 +3,7 @@
 source /home/bbasarab/shell/regions_list.sh
 
 # Set to '--write_to_nc' to write stats to netCDF files
-export write_to_nc_flag="--write_to_nc"
+export write_to_nc_flag=""
 
 # Set to '--plot' to make plots
 export plot_flag="--plot"
