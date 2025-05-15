@@ -594,84 +594,47 @@ def prepare_mesh_grids_for_contourf(data_array):
     # Potentially combine plot_cmap_multi_panel and plot_cmap_single_panel: the latter is just a "multi-panel" plot with one panel.
     # Remove plot_conus404_native_grid since its functionality will become generalized in the other functions.
 
-# For each time in the data array, create a single-paneled contour plot of precipitation
-def plot_cmap_single_panel(data_array, data_name, region, plot_levels,
-                           temporal_res = "native", use_contourf = True, sparse_cbar_ticks = False,
-                           proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP):
-    match proj_name:
-        case "LambertConformal":
-            map_proj = ccrs.LambertConformal()
-            data_proj = ccrs.PlateCarree()
-        case _:
-            map_proj = ccrs.PlateCarree()
-            data_proj = ccrs.PlateCarree()
-
-    time_dim = get_time_dimension_name(data_array)
-    dtimes = [pd.Timestamp(i) for i in data_array[time_dim].values]
-    for dtime in dtimes:
-        # Select data to plot (at one valid time)
-        data_to_plot = data_array.sel(time = dtime)
-
-        # Set figure title and name
-        formatted_short_name = precip_data_processors.format_short_name(data_to_plot)
-        valid_dt_str = dtime.strftime("%Y%m%d.%H")
-        print(f"Plotting {data_name} {data_array.short_name} data at {valid_dt_str}")
-
-        # Set up the figure
-        plt.figure(figsize = regions_info_dict[region].figsize_sp) 
-        axis = plt.axes(projection = map_proj)
+def add_cartopy_features_to_map_proj(axis, region, data_proj, draw_labels = False):
         axis.coastlines()
         axis.set_extent(regions_info_dict[region].region_extent, crs = data_proj)
         axis.add_feature(cfeature.BORDERS)
         if ("US" in region):
             axis.add_feature(cfeature.STATES)
-        gl = axis.gridlines(crs = data_proj, color = "gray", alpha = 0.5, draw_labels = True,
+        gl = axis.gridlines(crs = data_proj, color = "gray", alpha = 0.5, draw_labels = draw_labels,
                             linewidth = 0.5, linestyle = "dashed")
-        
-        # Plot the data
-        if use_contourf:
-            lon_mesh, lat_mesh = prepare_mesh_grids_for_contourf(data_to_plot)
-            plot_handle = axis.contourf(lon_mesh, lat_mesh, data_to_plot, levels = plot_levels, extend = "both", transform = data_proj, cmap = cmap)
-            plt.colorbar(plot_handle, orientation = "vertical", shrink = 0.7)
-            plot_handle.colorbar.ax.set_yticks(plot_levels)
-        else:
-            plot_handle = data_to_plot.plot(ax = axis, levels  = plot_levels, extend = "max", transform = data_proj, cmap = cmap,
-                                            x = "longitude", y = "latitude",
-                                            cbar_kwargs = {"orientation": "vertical", "shrink": 0.7, "ticks": plot_levels})
-        
-        # Configure axis labels, colorbar, and figure name
-        plot_handle.colorbar.set_label(f"{data_array.short_name} [{data_array.units}]", size = 15)
-        if sparse_cbar_ticks:
-            cbar_tick_labels = create_sparse_cbar_ticks(plot_levels) 
-        else:
-            cbar_tick_labels = plot_levels    
-        plot_handle.colorbar.ax.set_yticklabels(cbar_tick_labels)
-        plot_handle.colorbar.ax.tick_params(labelsize = 15)
-        plt.title(f"{data_name} {data_array.short_name} ending at {valid_dt_str}", fontsize = 15)
-        plt.xlabel("Latitude", fontsize = 15)
-        plt.ylabel("Longitude", fontsize = 15)
-        plt.xticks(fontsize = 15)
-        plt.yticks(fontsize = 15)
-        plt.tight_layout()
 
-        # Save figure
-        fname_proj_string = ""
-        if (proj_name != "PlateCarree"):
-            fname_proj_string = f"{proj}."
-        fig_name = f"cmap.{data_name}.{formatted_short_name}.{fname_proj_string}{valid_dt_str}.{region}.png"
-        fig_path = os.path.join(utils.plot_output_dir, fig_name)
-        print(f"Saving {fig_path}")
-        plt.savefig(fig_path)
+@dataclasses.dataclass
+class xyCoords:
+    x: str
+    y: str
+
+def determine_xy_coordinates(data_array):
+    coords = data_array.coords   
+ 
+    if ("lon" in coords) and ("lat" in coords):
+        return xyCoords(x = "lon", y = "lat")
+    elif ("latitude" in coords) and ("longitude" in coords):
+        return xyCoords(x = "longitude", y = "latitude")
+    elif ("x" in coords) and ("y" in coords):
+        return xyCoords(x = "x", y = "y")
+    else:
+        print(f"Error: Unrecognized x,y coordinates in {coords}; can't proceed with plotting")
+        sys.exit(1)
+
+# Could be more sophisticated here, for example, by making
+# sure the first dimension is a valid time dimension
+def determine_if_has_time_dim(data_array):
+    if (len(data_array.dims) == 3):
+        return True
+    return False
 
 # Contour maps with the correct number of panels, with the "truth" dataset always in the top left
-def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels, 
-                          use_contourf = False, sparse_cbar_ticks = False,
-                          single_colorbar = True, cmap = DEFAULT_PRECIP_CMAP):
+def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels, short_name = "precip_data", 
+                          single_colorbar = True, sparse_cbar_ticks = False, cmap = DEFAULT_PRECIP_CMAP):
     # Configure basic info about the data
     truth_da = data_dict[truth_data_name]
     num_da = len(data_dict.items())
     data_names_str = "".join(f"{key}." for key in data_dict.keys())
-
     if (num_da >= 5):
         figsize = regions_info_dict[region].figsize_mp_5plus
     else:
@@ -680,18 +643,29 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels,
     # Set map projection to be used for all subplots in the figure 
     proj = ccrs.PlateCarree()
 
+    # Handle dtime loop below according to whether a time dimension is present
+    has_time_dim = determine_if_has_time_dim(truth_da)
+    if has_time_dim:
+        time_dim = get_time_dimension_name(truth_da)
+        dtimes = [pd.Timestamp(i) for i in truth_da[time_dim].values]
+    else:
+        time_dim = ""
+        dtimes = [""]
+
     # Loop through these datetimes, making figures with subplots corresponding to each of the data arrays in data_dict
-    time_dim = get_time_dimension_name(truth_da)
-    dtimes = [pd.Timestamp(i) for i in truth_da[time_dim].values]
     for dtime in dtimes:
         if (type(dtime) is pd.Timestamp):
             loc_str = dtime.strftime(utils.full_date_format_str) # Format is %Y-%m-%d %H:%M:%S
             dt_str = dtime.strftime("%Y%m%d.%H")
         elif (type(dtime) is str):
-            loc_str = dtime
-            dt_str = dtime
+            if has_time_dim:
+                loc_str = dtime
+                dt_str = dtime
+            else:
+                loc_str = ""
+                dt_str = ""
         else:
-            print(f"Invalid datetime {dtime} to select data; not continuing to make plots")
+            print(f"Error: Invalid datetime {dtime} to select data; not continuing to make plots")
             return 
 
         fig = plt.figure(figsize = figsize)
@@ -699,23 +673,20 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels,
   
         # Loop through each of the subplot axes defined above (one axis for each DataArray) and plot the data 
         for axis, (data_name, da) in zip(axes_list, data_dict.items()):
-            axis.coastlines()
-            axis.set_extent(regions_info_dict[region].region_extent, crs = proj)
-            axis.add_feature(cfeature.BORDERS)
-            if ("US" in region):
-                axis.add_feature(cfeature.STATES)
+            add_cartopy_features_to_map_proj(axis, region, proj)
 
-            subplot_title = data_name
-            data_to_plot = da.loc[loc_str]
+            if has_time_dim:
+                data_to_plot = da.loc[loc_str]
+            else:
+                data_to_plot = da
+
+            xy_coords = determine_xy_coordinates(da)
 
             # One colorbar for entire figure; add as its own separate axis defined using subplot2grid 
             if single_colorbar:
-                if use_contourf:
-                    lon_mesh, lat_mesh = prepare_mesh_grids_for_contourf(data_to_plot)
-                    plot_handle = axis.contourf(lon_mesh, lat_mesh, data_to_plot[0,:,:], levels = plot_levels, extend = "both", transform = proj, cmap = cmap)
-                else:
-                    plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
-                                                    add_colorbar = not(single_colorbar))
+                plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
+                                                x = xy_coords.x, y = xy_coords.y, 
+                                                add_colorbar = not(single_colorbar))
                 cbar = fig.colorbar(plot_handle, cax = cbar_ax, ticks = plot_levels, shrink = 0.5, orientation = "horizontal")
                 cbar.set_label(da.units, size = 15)
                 cbar_tick_labels_rotation, cbar_tick_labels_fontsize = set_cbar_labels_rotation_and_fontsize(plot_levels, region, num_da, for_single_cbar = True)
@@ -723,93 +694,39 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels,
                 cbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
             # Separate colorbar for each subplot
             else:
-                if use_contourf:
-                    plot_handle = axis.contourf(lon_mesh, lat_mesh, data_to_plot[0,:,:], levels = plot_levels, extend = "both", transform = proj, cmap = cmap)
-                    axis.colorbar(plot_handle, orientation = "vertical", shrink = 0.7)
-                    plot_handle.colorbar.ax.set_yticks(plot_levels)
-                else:
-                    plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
-                                                    cbar_kwargs = {"shrink": 0.6, "ticks": plot_levels, "pad": 0.02, "orientation": "horizontal"})
-                    plot_handle.colorbar.set_label(da.units, size = 15, labelpad = -1.3)
-                    cbar_tick_labels = create_sparse_cbar_ticks(plot_levels) # 20241126: Label every other tick on subplot colorbars
-                    cbar_tick_labels_rotation, cbar_tick_labels_fontsize = set_cbar_labels_rotation_and_fontsize(cbar_tick_labels, region, num_da, for_single_cbar = False)
-                    plot_handle.colorbar.ax.set_xticklabels(cbar_tick_labels, rotation = cbar_tick_labels_rotation) 
-                    plot_handle.colorbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
-
-            gl = axis.gridlines(crs = proj, color = "gray", alpha = 0.5, draw_labels = False,
-                                linewidth = 0.5, linestyle = "dashed")
-            axis.set_title(subplot_title, fontsize = 16) 
+                plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
+                                                x = xy_coords.x, y = xy_coords.y,
+                                                cbar_kwargs = {"shrink": 0.6, "ticks": plot_levels, "pad": 0.02, "orientation": "horizontal"})
+                plot_handle.colorbar.set_label(da.units, size = 15, labelpad = -1.3)
+                cbar_tick_labels = create_sparse_cbar_ticks(plot_levels) # 20241126: Label every other tick on subplot colorbars
+                cbar_tick_labels_rotation, cbar_tick_labels_fontsize = set_cbar_labels_rotation_and_fontsize(cbar_tick_labels, region, num_da, for_single_cbar = False)
+                plot_handle.colorbar.ax.set_xticklabels(cbar_tick_labels, rotation = cbar_tick_labels_rotation) 
+                plot_handle.colorbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
+            axis.set_title(data_name, fontsize = 16)
 
         # Create the plot title 
-        formatted_short_name = precip_data_processors.format_short_name(truth_da)
+        try:
+            formatted_short_name = precip_data_processors.format_short_name(truth_da)
+        except AttributeError:
+            formatted_short_name = short_name
+
         if (type(dtime) is pd.Timestamp):
             title_string = f"{region} {formatted_short_name} valid at {dt_str}"
-        else:
+        elif (type(dtime) is str) and (has_time_dim):
             title_string = f"{region} {formatted_short_name}: {dt_str}"
+        else:
+            title_string = f"{region} {formatted_short_name}"
         fig.suptitle(title_string, fontsize = 16, fontweight = "bold")
         fig.tight_layout()
 
         # Save figure
-        fig_name = f"cmap.{data_names_str}{formatted_short_name}.{dt_str}.{region}.png"
+        if has_time_dim:
+            fig_name = f"cmap.{data_names_str}{formatted_short_name}.{dt_str}.{region}.png"
+        else:
+            fig_name = f"cmap.{data_names_str}{formatted_short_name}.{region}.png"
         fig_path = os.path.join(utils.plot_output_dir, fig_name)
         print(f"Saving {fig_path}")
         plt.savefig(fig_path)
-
-# This function is still necessary because I haven't figured out how to plot CONUS404 native grid data
-# (on the lambert conformal grid) using the xarray .plot() wrapper (it works but the output is nonsense).
-# For now, to avoid confusion, I'm maintaining this separate function that uses contourf only. This function
-# is very similar to plot_cmap_single_panel(). Ultimately, this CONUS404 native grid plotting issues needs to
-# be resolved to avoid having this nearly duplicate code. 
-def plot_conus404_native_grid(data_to_plot, plot_name = "native", proj = "PlateCarree", region = "CONUS", temporal_res = 24,
-                              sparse_cbar_ticks = False, cmap = DEFAULT_PRECIP_CMAP):
-    # Plot data on a map
-    match proj:
-        case "LambertConformal":
-            map_proj = ccrs.LambertConformal()
-            data_proj = ccrs.PlateCarree()
-        case _:
-            map_proj = ccrs.PlateCarree()
-            data_proj = ccrs.PlateCarree()
-
-    time_dim = get_time_dimension_name(data_to_plot)
-    for i, idt in enumerate(data_to_plot[time_dim].values):
-        valid_dt = pd.Timestamp(idt)
-        print(f"Plotting {temporal_res}-hour precipitation data ending at {valid_dt:%Y%m%d.%H}")
-
-        # Configure plot
-        plt.figure(figsize = regions_info_dict[region].figsize_sp)
-        axis = plt.axes(projection = map_proj)
-        axis.coastlines()
-        axis.set_extent(regions_info_dict[region].region_extent, crs = data_proj)
-        gl = axis.gridlines(crs = data_proj, color = "gray", alpha = 0.5, draw_labels = True,
-                            linewidth = 0.5, linestyle = "dashed")
-        axis.add_feature(cfeature.BORDERS)
-        axis.add_feature(cfeature.STATES)
-        plt.title(f"{plot_name} {data_to_plot.short_name} ending at {valid_dt:%Y%m%d.%H}", size = 15)
-
-        # Plot data
-        levels = variable_plot_limits(utils.accum_precip_var_name, temporal_res = temporal_res)
-        p = axis.contourf(data_to_plot["lon"], data_to_plot["lat"], data_to_plot[i,:,:], transform = data_proj,
-                          extend = "both", cmap = cmap, levels = levels)
-        
-        # Configure colorbar 
-        plt.colorbar(p, orientation = "vertical", shrink = 0.7)
-        p.colorbar.ax.set_yticks(levels)
-        if sparse_cbar_ticks:
-            cbar_tick_labels = create_sparse_cbar_ticks(levels)
-        else:
-            cbar_tick_labels = levels
-        p.colorbar.ax.set_yticklabels(cbar_tick_labels)
-        p.colorbar.ax.tick_params(labelsize = 15)
-        p.colorbar.set_label(f"{data_to_plot.short_name} [{data_to_plot.units}]", size = 15)
-
-        # Save figure
-        plt.tight_layout()
-        formatted_short_name = precip_data_processors.format_short_name(data_to_plot)
-        fig_name = f"cmap.{plot_name}.{formatted_short_name}.{proj}.{valid_dt:%Y%m%d.%H}.{region}.png"
-        fig_fpath = os.path.join("/home/bbasarab/plots", fig_name)
-        print(f"Saving {fig_fpath}")
-        plt.savefig(fig_fpath)
 
 # Plot a blank map for each region defined in regions_info_dict 
 # This can be useful to assess whether the bounds for each region need to be adjusted, for example. 
@@ -818,13 +735,7 @@ def plot_blank_map_of_each_region():
         plt.figure(figsize = region_config.figsize_sp)
         proj = ccrs.PlateCarree() 
         axis = plt.axes(projection = proj)
-        axis.coastlines()
-        axis.set_extent(region_config.region_extent, crs = proj)
-        axis.add_feature(cfeature.BORDERS)
-        if ("US" in region):
-            axis.add_feature(cfeature.STATES)
-        gl = axis.gridlines(crs = proj, color = "gray", alpha = 0.5, draw_labels = False,
-                            linewidth = 0.5, linestyle = "dashed")
+        add_cartopy_features_to_map_proj(axis, region, proj)
         plt.title(region, fontsize = 20)
         plt.tight_layout()
 
