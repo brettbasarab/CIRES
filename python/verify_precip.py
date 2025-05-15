@@ -40,25 +40,25 @@ def main():
     parser.add_argument("--cmaps", dest = "cmaps", action = "store_true", default = False,
                         help = "Set to plot contour maps (cmaps) of mean and percentiles of gridded data aggregated over various time periods")
     parser.add_argument("--fss", dest = "fss", action = "store_true", default = False,
-                        help = "Calculate fractions skill score (FSS) averaged over full evaluation time period") 
-    parser.add_argument("--fss_pctl_threshold", dest = "fss_pctl_threshold", action = "store_true", default = False,
-                        help = "Set to calculate FSS based on percentile (rather than amount) thresholds")
-    parser.add_argument("--fss_ari_grids", dest = "fss_ari_grids", action = "store_true", default = False,
-                        help = "Set to calculate FSS based on ARI grid (rather than amount) thresholds")
+                        help = "Calculate fractions skill score (FSS) using amount thresholds")
+    parser.add_argument("--fss_pctl", dest = "fss_pctl", action = "store_true", default = False,
+                        help = "Calculate fractions skill score (FSS) using percentile thresholds")
+    parser.add_argument("--fss_ari", dest = "fss_ari", action = "store_true", default = False,
+                        help = "Calculate fractions skill score (FSS) using ARI grid thresholds")
     parser.add_argument("--pdfs", dest = "pdfs", action = "store_true", default = False,
-                        help = "Calculate full-period and common-seasonal PDFs (and eventually, CDFs) of precip") 
+                        help = "Calculate probability density functions (PDFs) of precip") 
     parser.add_argument("--timeseries", dest = "timeseries", action = "store_true", default = False,
                         help = "Calculate time series of precip stats aggregated over individual months, seasons, years, etc. in the specified time period")
     # Write to netCDF flags: set to write calculated statistic(s) to netCDF
     parser.add_argument("--write_to_nc", dest = "write_to_nc", default = False, action = "store_true",
-                        help = "Set to write calcualted stats to netCDF")
+                        help = "Set to write calculated stats to netCDF")
     # Plotting flags
     parser.add_argument("--plot", dest = "plot", action = "store_true", default = False,
-                        help = "Set to make plots of calculated stats; otherwise only output stats to netCDF files")
+                        help = "Set to make plots of calculated stats")
     parser.add_argument("--poster", dest = "poster", action = "store_true", default = False,
                         help = "Set if plots to be produced are for a poster; will make plot fonts bigger")
     parser.add_argument("--scatter_plot", dest = "scatter_plot", action = "store_true", default = False,
-                        help = "Create additional scatter plots of accumulated precip over entire specified time period (most useful for case studies)")
+                        help = "Create scatter plots of accumulated precip over entire specified time period (most useful for case studies)")
     args = parser.parse_args()
 
     # Set up verification by instantiating the PrecipVerificationProcessor class
@@ -109,65 +109,109 @@ def main():
                 verif.plot_cmap_multi_panel(data_dict = agg_dict, single_colorbar = True, single_set_of_levels = False, plot_errors = False)
                 verif.plot_cmap_multi_panel(data_dict = agg_dict, single_colorbar = False, single_set_of_levels = False, plot_errors = True)
     
-    # Calculate and plot fractions skill score (FSS) by radius and threshold
+    eval_radius_list = utils.default_eval_radius_list_grid_cells * args.grid_cell_size
+    # Calculate and plot fractions skill score (FSS) by radius and amount threshold
     if args.fss:
-        print("**** Calculating FSS")
-        eval_radius_list = utils.default_eval_radius_list_grid_cells * args.grid_cell_size 
-        if args.fss_ari_grids:
-            # Calculate FSS by radius, using an ARI grid as threshold
-            fss_dict_by_radius = verif.calculate_fss(eval_type = "by_radius_ari_threshold", grid_cell_size = args.grid_cell_size,
-                                                     fixed_ari_threshold = 2, 
-                                                     eval_radius_list = eval_radius_list,
-                                                     write_to_nc = args.write_to_nc)
-            # Calculate FSS by ARI grid (i.e., using varying ARI grids as thresholds) 
-            fss_dict_by_ari = verif.calculate_fss(eval_type = "by_ari_grid", grid_cell_size = args.grid_cell_size,
-                                                  fixed_radius = 2 * args.grid_cell_size,
-                                                  eval_ari_list = utils.default_eval_ari_list_years,
-                                                  write_to_nc = args.write_to_nc)
+        print("******** Calculating FSS (using amount thresholds)")
+        eval_threshold_list = utils.default_eval_threshold_list_mm
 
-            # Plot FSS, averaged across evaluation period 
-            if args.plot:
-                for time_period_type in args.time_period_types:
-                    print(f"**** Calculating and plotting {time_period_type} aggregated FSS")
-                    verif.plot_aggregated_fss(eval_type = "by_radius_ari_threshold", xaxis_explicit_values = False,
-                                              time_period_type = time_period_type)
-                    verif.plot_aggregated_fss(eval_type = "by_ari_grid", xaxis_explicit_values = True,
-                                              time_period_type = time_period_type)
-        else:
-            is_pctl_threshold = False
-            fixed_threshold = 10 # mm
-            eval_threshold_list = utils.default_eval_threshold_list_mm
-            if args.fss_pctl_threshold:
-                is_pctl_threshold = True
-                fixed_threshold = 95.0 # percentile (75th percentile)
-                eval_threshold_list = utils.default_eval_threshold_list_pctl
+        # Calculate FSS by radius, using a fixed amount threshold 
+        fss_dict_by_radius = verif.calculate_fss(eval_type = "by_radius",
+                                                 grid_cell_size = args.grid_cell_size,
+                                                 fixed_threshold = 10, # mm 
+                                                 eval_radius_list = eval_radius_list, 
+                                                 is_pctl_threshold = False, 
+                                                 include_zeros = False,
+                                                 write_to_nc = args.write_to_nc)
 
-            # Calculate FSS by radius and threshold for each valid time
-            fss_dict_by_radius = verif.calculate_fss(eval_type = "by_radius", grid_cell_size = args.grid_cell_size,
-                                                     fixed_threshold = fixed_threshold, 
-                                                     eval_radius_list = eval_radius_list,
-                                                     is_pctl_threshold = is_pctl_threshold,
-                                                     include_zeros = False,
-                                                     write_to_nc = args.write_to_nc)
-            fss_dict_by_thresh = verif.calculate_fss(eval_type = "by_threshold", grid_cell_size = args.grid_cell_size,
-                                                     fixed_radius = 2 * args.grid_cell_size,
-                                                     eval_threshold_list = eval_threshold_list,
-                                                     is_pctl_threshold = is_pctl_threshold,
-                                                     include_zeros = False,
-                                                     write_to_nc = args.write_to_nc)
+        # Calculate FSS by amount threshold, using a fixed evaluation radius
+        fss_dict_by_thresh = verif.calculate_fss(eval_type = "by_threshold",
+                                                 grid_cell_size = args.grid_cell_size,
+                                                 fixed_radius = 2 * args.grid_cell_size, # degrees
+                                                 eval_threshold_list = eval_threshold_list,
+                                                 is_pctl_threshold = False,
+                                                 include_zeros = False,
+                                                 write_to_nc = args.write_to_nc)
+ 
+        # Plot FSS (using amount thresholds), averaged across evaluation period 
+        if args.plot:
+            for time_period_type in args.time_period_types:
+                print(f"**** Calculating and plotting {time_period_type} aggregated FSS (using amount thresholds)")
 
-            # Plot FSS, averaged across evaluation period 
-            if args.plot:
-                for time_period_type in args.time_period_types:
-                    print(f"**** Calculating and plotting {time_period_type} aggregated FSS")
-                    verif.plot_aggregated_fss(eval_type = "by_radius", xaxis_explicit_values = False,
-                                              time_period_type = time_period_type,
-                                              is_pctl_threshold = is_pctl_threshold)
-                    verif.plot_aggregated_fss(eval_type = "by_threshold", xaxis_explicit_values = False,
-                                              time_period_type = time_period_type,
-                                              is_pctl_threshold = is_pctl_threshold,
-                                              include_frequency_bias = True)
+                verif.plot_aggregated_fss(eval_type = "by_radius", xaxis_explicit_values = False,
+                                          time_period_type = time_period_type,
+                                          is_pctl_threshold = False)
 
+                verif.plot_aggregated_fss(eval_type = "by_threshold", xaxis_explicit_values = False,
+                                          time_period_type = time_period_type,
+                                          is_pctl_threshold = False, 
+                                          include_frequency_bias = True)
+ 
+    # Calculate and plot fractions skill score (FSS) by radius and percentile threshold 
+    if args.fss_pctl:
+        print("******** Calculating FSS (using percentile thresholds)")
+        eval_threshold_list = utils.default_eval_threshold_list_pctl
+
+        # Calculate FSS by radius, using a fixed amount threshold 
+        fss_dict_by_radius = verif.calculate_fss(eval_type = "by_radius",
+                                                 grid_cell_size = args.grid_cell_size,
+                                                 fixed_threshold = 95, # percentile 
+                                                 eval_radius_list = eval_radius_list, 
+                                                 is_pctl_threshold = True, 
+                                                 include_zeros = False, # whether to include zeros in percentile calculations
+                                                 write_to_nc = args.write_to_nc)
+
+        # Calculate FSS by amount threshold, using a fixed evaluation radius
+        fss_dict_by_thresh = verif.calculate_fss(eval_type = "by_threshold",
+                                                 grid_cell_size = args.grid_cell_size,
+                                                 fixed_radius = 2 * args.grid_cell_size, # degrees
+                                                 eval_threshold_list = eval_threshold_list,
+                                                 is_pctl_threshold = True,
+                                                 include_zeros = False, # whether to include zeros in percentile calculations
+                                                 write_to_nc = args.write_to_nc)
+
+        # Plot FSS (using percentile thresholds), averaged across evaluation period 
+        if args.plot:
+            for time_period_type in args.time_period_types:
+                print(f"**** Calculating and plotting {time_period_type} aggregated FSS (using percentile thresholds)")
+
+                verif.plot_aggregated_fss(eval_type = "by_radius", xaxis_explicit_values = False,
+                                          time_period_type = time_period_type,
+                                          is_pctl_threshold = True)
+
+                verif.plot_aggregated_fss(eval_type = "by_threshold", xaxis_explicit_values = False,
+                                          time_period_type = time_period_type,
+                                          is_pctl_threshold = True, 
+                                          include_frequency_bias = True)
+
+    # Calculate and plot fractions skill score (FSS) by radius and ARI grid threshold 
+    if args.fss_ari:
+        print("******** Calculating FSS (using ARI grid thresholds)")
+
+        # Calculate FSS by radius, using an ARI grid threshold
+        fss_dict_by_radius = verif.calculate_fss(eval_type = "by_radius_ari_threshold",
+                                                 grid_cell_size = args.grid_cell_size,
+                                                 fixed_ari_threshold = 2, # 2-year ARI grid 
+                                                 eval_radius_list = eval_radius_list,
+                                                 write_to_nc = args.write_to_nc)
+
+        # Calculate FSS by ARI grid (using varying ARI grids thresholds) 
+        fss_dict_by_ari = verif.calculate_fss(eval_type = "by_ari_grid",
+                                              grid_cell_size = args.grid_cell_size,
+                                              fixed_radius = 2 * args.grid_cell_size, # degrees
+                                              eval_ari_list = utils.default_eval_ari_list_years,
+                                              write_to_nc = args.write_to_nc)
+
+        # Plot FSS (using ARI grid thresholds), averaged across evaluation period 
+        if args.plot:
+            for time_period_type in args.time_period_types:
+                print(f"**** Calculating and plotting {time_period_type} aggregated FSS (using ARI grid thresholds)")
+
+                verif.plot_aggregated_fss(eval_type = "by_radius_ari_threshold", xaxis_explicit_values = False,
+                                          time_period_type = time_period_type)
+
+                verif.plot_aggregated_fss(eval_type = "by_ari_grid", xaxis_explicit_values = True,
+                                          time_period_type = time_period_type)
     # Plot PDFs and CDFs
     if args.pdfs:
         for time_period_type in args.time_period_types:
