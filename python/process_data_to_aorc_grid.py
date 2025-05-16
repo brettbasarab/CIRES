@@ -92,8 +92,7 @@ def main():
         pputils.plot_cmap_single_panel(precip_native_grid,
                                        plot_name, 
                                        processor.region,
-                                       use_contourf = use_contourf, 
-                                       temporal_res = args.output_temporal_res)
+                                       plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
    
         if dest_grid_flag:
             # Plot precip data at obs grid resolution
@@ -108,8 +107,7 @@ def main():
             pputils.plot_cmap_single_panel(precip_dest_grid,
                                            plot_name, 
                                            processor.region,
-                                           use_contourf = False,
-                                           temporal_res = args.output_temporal_res)
+                                           plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
 
     return processor
 

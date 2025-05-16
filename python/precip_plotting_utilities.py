@@ -580,10 +580,89 @@ def determine_if_has_time_dim(data_array):
         return True
     return False
 
+# For each time in the data array, create a single-paneled contour plot of precipitation
+def plot_cmap_single_panel(data_array, data_name, region, plot_levels, short_name = "precip_data", 
+                           temporal_res = "native",  proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP):
+    match proj_name:
+        case "LambertConformal":
+            map_proj = ccrs.LambertConformal()
+            data_proj = ccrs.PlateCarree()
+        case _:
+            map_proj = ccrs.PlateCarree()
+            data_proj = ccrs.PlateCarree()
+    
+    # Handle dtime loop below according to whether a time dimension is present
+    has_time_dim = determine_if_has_time_dim(data_array)
+    if has_time_dim:
+        time_dim = get_time_dimension_name(data_array)
+        dtimes = [pd.Timestamp(i) for i in data_array[time_dim].values]
+    else:
+        time_dim = ""
+        dtimes = [""]
+
+    for dtime in dtimes:
+        if (type(dtime) is pd.Timestamp):
+            loc_str = dtime.strftime(utils.full_date_format_str) # Format is %Y-%m-%d %H:%M:%S
+            dt_str = dtime.strftime("%Y%m%d.%H")
+        elif (type(dtime) is str):
+            loc_str = dtime
+            dt_str = dtime
+        else:
+            print(f"Error: Invalid datetime {dtime} to select data; not continuing to make plots")
+            return 
+
+        # Select data to plot (at one valid time)
+        if has_time_dim:
+            data_to_plot = data_array.loc[loc_str]
+        else:
+            data_to_plot = data_array
+            
+        xy_coords = determine_xy_coordinates(data_array)
+
+        # Set up the figure
+        plt.figure(figsize = regions_info_dict[region].figsize_sp)
+        axis = plt.axes(projection = map_proj)
+        add_cartopy_features_to_map_proj(axis, region, data_proj, draw_labels = True)
+
+        # Plot the data
+        plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, extend = "max", transform = data_proj, cmap = cmap,
+                                        x = xy_coords.x, y = xy_coords.y, 
+                                        cbar_kwargs = {"orientation": "horizontal", "ticks": plot_levels})
+
+        # Configure color bar, axis labels and ticks, title, and figure name
+        try:
+            formatted_short_name = precip_data_processors.format_short_name(data_array)
+        except AttributeError:
+            formatted_short_name = short_name
+
+        plot_handle.colorbar.set_label(data_array.units, size = 15) 
+        plot_handle.colorbar.ax.set_xticklabels(plot_levels)
+        plot_handle.colorbar.ax.tick_params(labelsize = 15)
+        plt.xlabel("Latitude", fontsize = 15)
+        plt.ylabel("Longitude", fontsize = 15)
+        plt.xticks(fontsize = 15)
+        plt.yticks(fontsize = 15)
+        plt.tight_layout()
+        
+        if (type(dtime) is pd.Timestamp):
+            title_string = f"{region} {formatted_short_name} valid at {dt_str}"
+        elif (type(dtime) is str) and (has_time_dim):
+            title_string = f"{region} {formatted_short_name}: {dt_str}"
+        else:
+            title_string = f"{region} {formatted_short_name}"
+        plt.title(title_string, fontsize = 15, fontweight = "bold")
+        plt.tight_layout()
+
+        # Save figure
+        if has_time_dim:
+            fig_name = f"cmap.{data_name}.{formatted_short_name}.{dt_str}.{region}.png"
+        else:
+            fig_name = f"cmap.{data_name}.{formatted_short_name}.{region}.png"
+        fig_path = os.path.join(utils.plot_output_dir, fig_name)
+        print(f"Saving {fig_path}")
+        plt.savefig(fig_path)
+
 # Contour maps with the correct number of panels, with the "truth" dataset always in the top left
-# FIXME: Works for single-panel plots (one dataset), but it's all a bit awkward: need to pass single dataset
-# in a dictionary, too much space left between plot and title, etc. Either fix this or consider
-# just having a separate plot_cmap_single_panel function
 def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels, short_name = "precip_data", 
               single_colorbar = True, sparse_cbar_ticks = False, cmap = DEFAULT_PRECIP_CMAP):
     # Configure basic info about the data
@@ -617,12 +696,8 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels, short
             loc_str = dtime.strftime(utils.full_date_format_str) # Format is %Y-%m-%d %H:%M:%S
             dt_str = dtime.strftime("%Y%m%d.%H")
         elif (type(dtime) is str):
-            if has_time_dim:
-                loc_str = dtime
-                dt_str = dtime
-            else:
-                loc_str = ""
-                dt_str = ""
+            loc_str = dtime
+            dt_str = dtime
         else:
             print(f"Error: Invalid datetime {dtime} to select data; not continuing to make plots")
             return 
@@ -664,11 +739,7 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels, short
                 cbar_tick_labels_rotation, cbar_tick_labels_fontsize = set_cbar_labels_rotation_and_fontsize(cbar_tick_labels, region, num_da, for_single_cbar = False)
                 plot_handle.colorbar.ax.set_xticklabels(cbar_tick_labels, rotation = cbar_tick_labels_rotation) 
                 plot_handle.colorbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
-            # Don't need titles for each axis for single-panel plot, since there's only one axis
-            if (num_da > 1):
-                axis.set_title(data_name, fontsize = 16)
-            else:
-                axis.set_title(None)
+            axis.set_title(data_name, fontsize = 16)
 
         # Create the plot title 
         try:

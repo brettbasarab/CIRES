@@ -100,8 +100,7 @@ def main():
             pputils.plot_cmap_single_panel(model_precip,
                                            processor.model_name,
                                            processor.region,
-                                           use_contourf = False,
-                                           temporal_res = args.temporal_res)
+                                           plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
         else:
             use_contourf = False
             if (args.data_name == "CONUS404"):
@@ -113,8 +112,7 @@ def main():
             pputils.plot_cmap_single_panel(obs_precip,
                                            processor.obs_name,
                                            processor.region,
-                                           use_contourf = use_contourf,
-                                           temporal_res = args.temporal_res)
+                                           plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
        
             if model_grid_flag: 
                 # Plot QPE data at Replay resolution
@@ -123,8 +121,7 @@ def main():
                 pputils.plot_cmap_single_panel(obs_precip_model_grid,
                                                f"{processor.obs_name}.{processor.model_name}Grid",
                                                processor.region,
-                                               use_contourf = False, 
-                                               temporal_res = args.temporal_res)
+                                               plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
 
                 # Plot Replay data
                 print(f"*** Plotting {processor.model_name} data")
@@ -132,8 +129,7 @@ def main():
                 pputils.plot_cmap_single_panel(model_precip,
                                                processor.model_name,
                                                processor.region,
-                                               use_contourf = False, 
-                                               temporal_res = args.temporal_res)
+                                               plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
 
     return processor
 
