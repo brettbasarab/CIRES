@@ -26,9 +26,6 @@ def main():
     print("Plotting contour maps for visual comparison")
     plot_levels = np.arange(0, 210, 10)
     pputils.plot_cmap_multi_panel(da_dict, "Native", "CONUS", plot_levels, short_name = "02yearARIs")
-    #pputils.plot_cmap_single_panel(da_dict["Bilinear"], "Bilinear", "CONUS", plot_levels, use_contourf = False)    
-    #pputils.plot_cmap_single_panel(da_dict["Nearest"], "Nearest", "CONUS", plot_levels, use_contourf = False)    
-    #pputils.plot_cmap_single_panel(da_dict["Native"], "Native", "CONUS", plot_levels, use_contourf = False)
 
     # Create CDFs
     print("Creating CDFs")

@@ -35,7 +35,7 @@ def main():
         # Plot data
         print("Plotting data, single-panel plot")
         pputils.plot_cmap_single_panel(accum_precip_da, plot_name, region, use_contourf = use_contourf, temporal_res = output_temporal_res)
-    ##### Single panel plot #####
+    ##### Multi panel plot #####
     else:
         # Read data
         print("Reading data")
@@ -48,7 +48,7 @@ def main():
                 da = xr.open_mfdataset(fpath).accum_precip
                 accum_precip = calculate_accum_precip(da, output_temporal_res, native_temporal_res)
             elif ("NestedReplay" in data_name): 
-                fpath = os.path.join(utils.data_nc_dir, f"{data_name}.{output_temporal_res:02d}_hour_precipitation", f"*corrector*{args.valid_dt_str}*.nc")
+                fpath = os.path.join(utils.data_nc_dir, f"{data_name}.{output_temporal_res:02d}_hour_precipitation", f"*{args.valid_dt_str}*.nc")
                 print(f"Reading {fpath}")
                 accum_precip = xr.open_mfdataset(fpath).precipitation_24_hour
             else:
@@ -59,7 +59,7 @@ def main():
             data_dict[data_name] = accum_precip
 
         print("Plotting data, multi-panel plot")
-        pputils.plot_cmap_multi_panel(data_dict, region, "AORC.NativeGrid", np.arange(0,160,10), use_contourf = use_contourf)
+        pputils.plot_cmap_multi_panel(data_dict, "AORC.NativeGrid", region, np.arange(0,160,10))
 
 def calculate_accum_precip(da, output_temporal_res, native_temporal_res):
     da = da.rename({"time":"period_end_time"})

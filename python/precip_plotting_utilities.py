@@ -477,10 +477,7 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
     cbar_ax = None
     match num_da:
         case 1:
-            single_colorbar = False # Keyword is irrelevant if we only have a single plot, so set it to False
-            axes_list = [
-                        plt.subplot2grid((1, 1), (0, 0), projection = proj),
-                        ]
+            axes_list = [plt.axes(projection = proj)]
         case 2:
             if single_colorbar:
                 axes_list = [
@@ -547,53 +544,6 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
 
     return axes_list, cbar_ax
 
-# Add time dimension (if there isn't one) and short_name attribute
-# to data array, so the plotting functions below can plot it.
-# NOTE: Mean to be a temporary fix; should change the plotting functions
-# themselves to work with data without a time dimension (i.e., a single grid).
-def format_data_array_for_plotting(data_array):
-    data_array = data_array.expand_dims(dim = {"time": [pd.Timestamp.now()]}, axis = 0)
-    data_array.attrs["short_name"] = "24 hour precipitation"
-
-    return data_array 
-
-def prepare_mesh_grids_for_contourf(data_array):
-    if ("lon" in data_array.coords):
-        lon_array = data_array.lon
-    elif ("longitude" in data_array.coords):
-        lon_array = data_array.longitude
-    else:
-        print(f"Error: Can't find longitude dimension in {data_array.coords}")
-        sys.exit(1)
-
-    if ("lat" in data_array.coords):
-        lat_array = data_array.lat
-    elif ("latitude" in data_array.coords):
-        lat_array = data_array.latitude
-    else:
-        print(f"Error: Can't find latitude dimension in {data_array.coords}")
-        sys.exit(1)
-
-    if (len(lon_array.shape) != len(lat_array.shape)):
-        print(f"Error: Shapes of longitude {lon_array.shape} and latitude {lat_array.shape} arrays don't match; can't plot with contourf")
-        sys.exit(1)
-
-    if (len(lon_array.shape) == 1): 
-        return np.meshgrid(lon_array, lat_array)
-    elif (len(lon_array.shape) == 2):
-        return lon_array, lat_array 
-    else:
-        print(f"Error: Latitude/longitude array shape is {lon_array.shape}; must have 1 or 2 dimensions to plot using contourf")
-        sys.exit(1)
-
-# TODO (plotting functions):
-    # Add coastlines, cartopy features in a function since this code is reused several times.
-    # Generalize plotting to handle arrays with multi-dimensional coordinates (need, e.g., x = "longitude", y = "latitude"). 
-    # Generalize to be able to plot 3-D arrays with a time dimension (one plot for each time) and 2-D arrays (one grid only).
-    # Generalize how time dimension is selected from 3-D arrays: .loc?; .sel?; how to generalize the dimension name?
-    # Potentially combine plot_cmap_multi_panel and plot_cmap_single_panel: the latter is just a "multi-panel" plot with one panel.
-    # Remove plot_conus404_native_grid since its functionality will become generalized in the other functions.
-
 def add_cartopy_features_to_map_proj(axis, region, data_proj, draw_labels = False):
         axis.coastlines()
         axis.set_extent(regions_info_dict[region].region_extent, crs = data_proj)
@@ -617,8 +567,10 @@ def determine_xy_coordinates(data_array):
         return xyCoords(x = "longitude", y = "latitude")
     elif ("x" in coords) and ("y" in coords):
         return xyCoords(x = "x", y = "y")
+    elif ("grid_xt" in coords) and ("grid_yt" in coords):
+        return xyCoords(x = "grid_xt", y = "grid_yt")
     else:
-        print(f"Error: Unrecognized x,y coordinates in {coords}; can't proceed with plotting")
+        print(f"Error: Unrecognized x,y coordinates in {coords} \nCan't proceed with plotting")
         sys.exit(1)
 
 # Could be more sophisticated here, for example, by making
@@ -629,8 +581,11 @@ def determine_if_has_time_dim(data_array):
     return False
 
 # Contour maps with the correct number of panels, with the "truth" dataset always in the top left
+# FIXME: Works for single-panel plots (one dataset), but it's all a bit awkward: need to pass single dataset
+# in a dictionary, too much space left between plot and title, etc. Either fix this or consider
+# just having a separate plot_cmap_single_panel function
 def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels, short_name = "precip_data", 
-                          single_colorbar = True, sparse_cbar_ticks = False, cmap = DEFAULT_PRECIP_CMAP):
+              single_colorbar = True, sparse_cbar_ticks = False, cmap = DEFAULT_PRECIP_CMAP):
     # Configure basic info about the data
     truth_da = data_dict[truth_data_name]
     num_da = len(data_dict.items())
@@ -639,6 +594,10 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels, short
         figsize = regions_info_dict[region].figsize_mp_5plus
     else:
         figsize = regions_info_dict[region].figsize_mp
+    
+    # single_colorbar refers to having a single color bar for multiple subplots, so not relevant for single-panel plot
+    if (num_da == 1):
+        single_colorbar = False
 
     # Set map projection to be used for all subplots in the figure 
     proj = ccrs.PlateCarree()
@@ -682,7 +641,7 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels, short
 
             xy_coords = determine_xy_coordinates(da)
 
-            # One colorbar for entire figure; add as its own separate axis defined using subplot2grid 
+            # One colorbar for all subplots on figure; add as its own separate axis defined using subplot2grid 
             if single_colorbar:
                 plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
                                                 x = xy_coords.x, y = xy_coords.y, 
@@ -698,11 +657,18 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels, short
                                                 x = xy_coords.x, y = xy_coords.y,
                                                 cbar_kwargs = {"shrink": 0.6, "ticks": plot_levels, "pad": 0.02, "orientation": "horizontal"})
                 plot_handle.colorbar.set_label(da.units, size = 15, labelpad = -1.3)
-                cbar_tick_labels = create_sparse_cbar_ticks(plot_levels) # 20241126: Label every other tick on subplot colorbars
+                if sparse_cbar_ticks: 
+                    cbar_tick_labels = create_sparse_cbar_ticks(plot_levels) # 20241126: Label every other tick on small subplot colorbars
+                else:
+                    cbar_tick_labels = plot_levels 
                 cbar_tick_labels_rotation, cbar_tick_labels_fontsize = set_cbar_labels_rotation_and_fontsize(cbar_tick_labels, region, num_da, for_single_cbar = False)
                 plot_handle.colorbar.ax.set_xticklabels(cbar_tick_labels, rotation = cbar_tick_labels_rotation) 
                 plot_handle.colorbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
-            axis.set_title(data_name, fontsize = 16)
+            # Don't need titles for each axis for single-panel plot, since there's only one axis
+            if (num_da > 1):
+                axis.set_title(data_name, fontsize = 16)
+            else:
+                axis.set_title(None)
 
         # Create the plot title 
         try:
