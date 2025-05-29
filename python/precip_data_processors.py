@@ -128,10 +128,10 @@ def write_data_array_to_netcdf(data_array, output_var_name, dir_name, fname_pref
             hour_span_timestamp = f".{first_timestamp.hour:02d}z-{first_timestamp.hour:02d}z"
             dir_name += hour_span_timestamp
 
-            if (not os.path.exists(dir_name)):
-                print(f"Creating directory {dir_name}")
-                if not(testing):
-                    os.mkdir(dir_name)
+        if (not os.path.exists(dir_name)):
+            print(f"Creating directory {dir_name}")
+            if not(testing):
+                os.mkdir(dir_name)
 
         if (file_cadence == "interval_hours"):
             for valid_dt in data_array["period_end_time"].values:
