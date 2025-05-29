@@ -574,7 +574,7 @@ class ImergDataProcessor(ReplayDataProcessor):
 
         # Call data processing methods
         self._create_precip_data_array()
-        self._calculate_all_accum_precip_amounts()
+        self._calculate_all_native_accum_precip_amounts()
 
         # Set an accompanying model grid to interpolate to
         if self.MODEL_GRID_FLAG:
@@ -606,7 +606,8 @@ class ImergDataProcessor(ReplayDataProcessor):
                 if (not self.MODEL_GRID_FLAG): 
                     print(f"No data at {spatial_res} spatial resolution")
                     return
-                data_array = self.precip_model_grid
+                data_array = self._calculate_imerg_accum_precip_amount(time_period_hours = temporal_res, spatial_res = spatial_res) 
+                self._add_imerg_data_array_attributes(data_array, temporal_res) 
             case "native":
                 match temporal_res:
                     case "native":
@@ -615,7 +616,7 @@ class ImergDataProcessor(ReplayDataProcessor):
                         data_array = self._calculate_imerg_accum_precip_amount(time_period_hours = temporal_res)
                         self._add_imerg_data_array_attributes(data_array, temporal_res) 
             case _:
-                print(f"No data at {spatial_res} spatial resolution")
+                print(f"No data at {spatial_res} spatial resolution; use 'native' or 'model'")
                 return
             
         if load:
@@ -732,14 +733,20 @@ class ImergDataProcessor(ReplayDataProcessor):
 
     # Sum hourly totals to derive totals over longer time periods
     # (3, 6, 12, 24 hours...). Again, some code here needs to be generalized.
-    def _calculate_imerg_accum_precip_amount(self, time_period_hours = 3):
-        roller = self.precip_hourly.rolling({self.period_end_time_dim_str: time_period_hours})
-        accum_precip_data_array = roller.sum()[(time_period_hours - 1)::time_period_hours,:,:]
+    def _calculate_imerg_accum_precip_amount(self, time_period_hours = 3, spatial_res = "native"):
+        if (spatial_res == "model"):
+            time_step = int(time_period_hours/self.model_temporal_res)
+            raw_data = self.precip_model_grid
+        else:
+            time_step = int(time_period_hours/1) # Use IMERG hourly data to calculate other accumulation amounts
+            raw_data = self.precip_hourly
+        roller = raw_data.rolling({self.period_end_time_dim_str: time_step})
+        accum_precip_data_array = roller.sum()[(time_step - 1)::time_step,:,:]
 
         return accum_precip_data_array
 
-    def _calculate_all_accum_precip_amounts(self):
-        print(f"Calculating {self.obs_name} accumulated precipitation amounts")
+    def _calculate_all_native_accum_precip_amounts(self):
+        print(f"Calculating {self.obs_name} accumulated precipitation amounts on {self.obs_name} grid")
 
         self.precip_hourly = self._calculate_hourly_precip_amount()
         self._add_imerg_data_array_attributes(self.precip_hourly, 1)
@@ -950,6 +957,9 @@ class ERA5DataProcessor(ReplayDataProcessor):
                         data_array = self.era5_da_dict[utils.accum_precip_var_name]
                     case _:
                         data_array = self._calculate_era5_accum_precip_amount(time_period_hours = temporal_res)
+            case _:
+                print(f"No data at {spatial_res} spatial resolution; use 'native' or 'model'")
+                return
 
         if load:
             print(f"Loading precip data for {self.obs_name}")
@@ -1203,6 +1213,9 @@ class AorcDataProcessor(ReplayDataProcessor):
                         data_array = self.aorc_native_accum_precip 
                     case _:
                         data_array = self._calculate_aorc_accum_precip_amount(time_period_hours = temporal_res)
+            case _:
+                print(f"No data at {spatial_res} spatial resolution; use 'native' or 'model'")
+                return
 
         if load:
             print(f"Loading precip data for {self.obs_name}")
@@ -1444,6 +1457,9 @@ class CONUS404DataProcessor(object):
                             data_array = self.read_precip_data_from_netcdf(temporal_res = temporal_res, spatial_res = spatial_res) 
                         else: # Data will have been loaded from Azure, so proceed normally
                             data_array = self._calculate_conus404_accum_precip_amount(time_period_hours = temporal_res)
+            case _:
+                print(f"No data at {spatial_res} spatial resolution; use 'native' or 'dest_grid'")
+                return
 
         if load:
             print(f"Loading precip data for {self.data_name}")
@@ -1521,20 +1537,26 @@ class CONUS404DataProcessor(object):
         output_grid_string = set_grid_name_for_file_names(self.dest_grid_name)
         template_file = f"{output_grid_string}.nc"
         template_fpath = os.path.join(self.netcdf_dir, "TemplateGrids", template_file)
+        
+        # If 24-hour precip timestamps are not valid at hour=00z, add a string to the directory and
+        # file names denoting the hour at which 24-hour accumulated data starts (e.g., if 24-hour periods are from 12z-12z)
+        hour_span_timestamp = ""
+        if (self.dest_temporal_res == 24) and (self.end_dt.hour != 0):
+            hour_span_timestamp = f".{self.end_dt.hour:02d}z-{self.end_dt.hour:02d}z"
 
         # Input data directory (data on native Replay grid) but at the desired temporal resolution (e.g., 24-hour precip)
         input_grid_name = set_grid_name_for_file_names("native")
-        input_dir = f"{self.data_name}.{input_grid_name}.{self.dest_temporal_res:02d}_hour_precipitation"
+        input_dir = f"{self.data_name}.{input_grid_name}.{self.dest_temporal_res:02d}_hour_precipitation{hour_span_timestamp}"
         input_dir = os.path.join(self.netcdf_dir, input_dir)
         if (not os.path.exists(input_dir)):
-            print(f"Error: Input directory containing netCDF files on {self.data_name} native_grid does not exist")
+            print(f"Error: Input directory {input_dir} containing netCDF files on {self.data_name} native_grid does not exist")
             return
         
         # Collect list of input files at native grid resolution
         valid_daily_dt_list = construct_daily_datetime_list(self.start_dt, self.end_dt)
         native_grid_file_list = []
         for dtime in valid_daily_dt_list:
-            fname = f"CONUS404.{input_grid_name}.{self.dest_temporal_res:02d}_hour_precipitation.{dtime:%Y%m%d}.nc"
+            fname = f"CONUS404.{input_grid_name}.{self.dest_temporal_res:02d}_hour_precipitation.{dtime:%Y%m%d}{hour_span_timestamp}.nc"
             fpath = os.path.join(input_dir, fname)
             if (not os.path.exists(fpath)):
                 print(f"Warning: Input file path {fpath} does not exist; not including in input file list")
@@ -1546,7 +1568,7 @@ class CONUS404DataProcessor(object):
             return
 
         # Create output directory
-        output_dir = f"{self.data_name}.{output_grid_string}.{self.dest_temporal_res:02d}_hour_precipitation" 
+        output_dir = f"{self.data_name}.{output_grid_string}.{self.dest_temporal_res:02d}_hour_precipitation{hour_span_timestamp}" 
         output_dir = os.path.join(self.netcdf_dir, output_dir)
         if (not os.path.exists(output_dir)):
             print(f"Creating directory {output_dir}")
@@ -1556,7 +1578,7 @@ class CONUS404DataProcessor(object):
         for input_fpath in native_grid_file_list:
             print(f"Interpolating {input_fpath} from {self.data_name} native grid to {self.dest_grid_name} grid")
             dstr = os.path.basename(input_fpath).split(".")[3]
-            output_file = f"{self.data_name}.{output_grid_string}.{self.dest_temporal_res:02d}_hour_precipitation.{dstr}.nc" 
+            output_file = f"{self.data_name}.{output_grid_string}.{self.dest_temporal_res:02d}_hour_precipitation.{dstr}{hour_span_timestamp}.nc" 
             output_fpath = os.path.join(output_dir, output_file)
             cdo_cmd = f"cdo -P 8 remapbil,{template_fpath} {input_fpath} {output_fpath}"
             print(f"Executing: {cdo_cmd}")
@@ -1564,15 +1586,21 @@ class CONUS404DataProcessor(object):
 
     ##### PUBLIC METHODS (CONUS404DataProcessor) #####
     def read_precip_data_from_netcdf(self, temporal_res = 24, spatial_res = "native"):
+        # If 24-hour precip timestamps are not valid at hour=00z, add a string to the directory and
+        # file names denoting the hour at which 24-hour accumulated data starts (e.g., if 24-hour periods are from 12z-12z)
+        hour_span_timestamp = ""
+        if (self.dest_temporal_res == 24) and (self.end_dt.hour != 0):
+            hour_span_timestamp = f".{self.end_dt.hour:02d}z-{self.end_dt.hour:02d}z"
+
         # Construct list of CONUS404 netCDF files to read into xarray Dataset
         input_file_list = []
         if (spatial_res == "native"):
             output_grid_string = set_grid_name_for_file_names("native")
         elif (spatial_res == "dest_grid"):
             output_grid_string = set_grid_name_for_file_names(self.dest_grid_name)
-        input_dir = os.path.join(utils.data_nc_dir, f"{self.data_name}.{output_grid_string}.{temporal_res:02d}_hour_precipitation")
+        input_dir = os.path.join(utils.data_nc_dir, f"{self.data_name}.{output_grid_string}.{temporal_res:02d}_hour_precipitation{hour_span_timestamp}")
         for dtime in construct_daily_datetime_list(self.start_dt, self.end_dt): 
-            fname = f"{self.data_name}.{output_grid_string}.{temporal_res:02d}_hour_precipitation.{dtime:%Y%m%d}.nc"
+            fname = f"{self.data_name}.{output_grid_string}.{temporal_res:02d}_hour_precipitation.{dtime:%Y%m%d}{hour_span_timestamp}.nc"
             fpath = os.path.join(input_dir, fname)
             if (not os.path.exists(fpath)):
                 print(f"Warning: Input file path {fpath} does not exist; not including in input file list")
@@ -1625,9 +1653,12 @@ class CONUS404DataProcessor(object):
                                        temporal_res = temporal_res,
                                        file_cadence = file_cadence,
                                        testing = testing)
-        elif (spatial_res == "dest_grid"):
+        elif (spatial_res == "dest_grid") or (spatial_res == "model"):
             # This method will do the interpolation via cdo, so it writes to netCDF as part of that process.
             self._spatially_interpolate_conus404_to_dest_grid()
+        else:
+            print(f"No data at {spatial_res} spatial resolution; use 'native', 'dest_grid', or 'model'")
+            return
 
 class NestedReplayDataProcessor(object):
     def __init__(self, start_dt_str, end_dt_str,

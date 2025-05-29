@@ -102,10 +102,6 @@ def main():
                                            processor.region,
                                            plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
         else:
-            use_contourf = False
-            if (args.data_name == "CONUS404"):
-                use_contourf = True
-
             # Plot QPE data at native spatial resolution
             print(f"*** Plotting {args.data_name} {args.temporal_res}-hourly data at native {args.data_name} spatial resolution")
             obs_precip = processor.get_precip_data(temporal_res = args.temporal_res, spatial_res = "native", load = True)
