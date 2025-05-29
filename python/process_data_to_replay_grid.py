@@ -22,12 +22,10 @@ def main():
                         help = "Start date of time period over which to process data")
     parser.add_argument("end_dt_str",
                         help = "End date of time period over which to process data")
-    parser.add_argument("--temporal_res", dest = "temporal_res", type = int, default = 3,
-                        help = "Temporal resolution in hours of the processed obs data to write to netCDF (default 3)")
+    parser.add_argument("--temporal_res", dest = "temporal_res", type = int, default = 24,
+                        help = "Temporal resolution in hours of the processed obs data to write to netCDF (default 24)")
     parser.add_argument("--spatial_res", dest = "spatial_res", choices = ["native", "model"], default = "native",
                         help = "Spatial resolution type of the data to write to netCDF (default 'native')")
-    parser.add_argument("--model_temporal_res", dest = "model_temporal_res", type = int, default = 3,
-                        help = "Temporal resolution in hours of the model (usually global Replay) data to interpolate to/from (default 3)")
     parser.add_argument("--region", dest = "region", default = "Global",
                         help = "For plotting only: region to zoom plots to")
     parser.add_argument("--write_to_nc", dest = "write_to_nc", default = False, action = "store_true",
@@ -41,6 +39,7 @@ def main():
     args = parser.parse_args()
 
     model_grid_flag = False
+    model_temporal_res = 3
     if (args.spatial_res == "model"):
         model_grid_flag = True
 
@@ -50,7 +49,7 @@ def main():
             processor = precip_data_processors.AorcDataProcessor(args.start_dt_str,
                                                                  args.end_dt_str,
                                                                  MODEL_GRID_FLAG = model_grid_flag,
-                                                                 model_temporal_res = args.model_temporal_res,
+                                                                 model_temporal_res = model_temporal_res, 
                                                                  region = args.region)
         case "CONUS404":
             processor = precip_data_processors.CONUS404DataProcessor(args.start_dt_str,
@@ -62,13 +61,13 @@ def main():
             processor = precip_data_processors.ERA5DataProcessor(args.start_dt_str,
                                                                  args.end_dt_str,
                                                                  MODEL_GRID_FLAG = model_grid_flag,
-                                                                 model_temporal_res = args.model_temporal_res,
+                                                                 model_temporal_res = model_temporal_res, 
                                                                  region = args.region)
         case "IMERG":
             processor = precip_data_processors.ImergDataProcessor(args.start_dt_str,
                                                                   args.end_dt_str,
                                                                   MODEL_GRID_FLAG = model_grid_flag,
-                                                                  model_temporal_res = args.model_temporal_res,
+                                                                  model_temporal_res = model_temporal_res, 
                                                                   region = args.region)
         case "Replay":
             print("Processing data for Replay only; not for any other datasets")
@@ -88,6 +87,7 @@ def main():
                                                         testing = args.test_nc)
         else:
             processor.write_precip_data_to_netcdf(temporal_res = args.temporal_res,
+                                                  spatial_res = args.spatial_res,
                                                   file_cadence = args.nc_file_cadence,
                                                   testing = args.test_nc) 
  

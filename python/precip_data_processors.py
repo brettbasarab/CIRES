@@ -8,19 +8,14 @@
 # performance or at least significantly change the data.
 
 # Classes include:
-    # ReplayDataProcessor: process Replay data to calculate accumulated precipitation amounts 
-    # ImergDataProcesor: process IMERG QPE data to calculate accumulated precipitation amounts; interpolate to Replay grid
-    # ERA5DataProcessor: process ERA5 QPE data to calculate accumulated precipitation amounts; interpolate to Replay grid
-    # AorcDataProcessor: process AORC QPE data to calculate accumulated precipitation amounts; interpolate to Replay grid
-    # CONUS404DataProcessor: process CONUS404 QPE data to calculate accumulated precipitation amounts; interpolate to Replay grid
+    # ReplayDataProcessor: process Replay precip data to calculate accumulated precipitation amounts 
+    # ImergDataProcesor: process IMERG precip data to calculate accumulated precipitation amounts; interpolate to Replay grid
+    # ERA5DataProcessor: process ERA5 precip data to calculate accumulated precipitation amounts; interpolate to Replay grid
+    # AorcDataProcessor: process AORC precip data to calculate accumulated precipitation amounts; interpolate to Replay grid
+    # CONUS404DataProcessor: process CONUS404 precip data to calculate accumulated precipitation amounts; interpolate to destination grid
+    # NestedReplayDataProcessor: process Nested Replay precip data to calculate accumulated precipitation amounts; interpolate to destination grid 
 
 # TODO:
-    # When the nested (high resolution) Replay is working, we'll need to develop new classes
-    # that interpolate its output to the QPE grid(s) we want to verify against. For this
-    # much finer resolution dataset, it is more justifiable to interpolate to the verification (QPE) grid. These 
-    # QPE grids will include AORC (https://onlinelibrary.wiley.com/doi/10.1111/1752-1688.13143) and NCEP Stage IV.
-
-# OR:
     # Generalize the functionality of these classes (it should be mostly there) to interpolate
     # to any destination grid (rather than only the Replay grid). What will have to sigificantly change
     # are many of the variable, attribute, and method names within the classes. For example, <model_name>
@@ -125,10 +120,18 @@ def set_grid_name_for_file_names(output_grid_name):
     # Anything else: write all data to a single file
 def write_data_array_to_netcdf(data_array, output_var_name, dir_name, fname_prefix, timestamp_format,
                                temporal_res = 3, file_cadence = "day", testing = False): 
-        if (not os.path.exists(dir_name)):
-            print(f"Creating directory {dir_name}")
-            if not(testing):
-                os.mkdir(dir_name)
+        # If 24-hour precip timestamps are not valid at hour=00z, add a string to the directory and
+        # file names denoting the hour at which 24-hour accumulated data starts (e.g., if 24-hour periods are from 12z-12z)
+        hour_span_timestamp = ""
+        first_timestamp = pd.Timestamp(data_array.period_end_time.values[0])
+        if (temporal_res == 24) and (first_timestamp.hour != 0):
+            hour_span_timestamp = f".{first_timestamp.hour:02d}z-{first_timestamp.hour:02d}z"
+            dir_name += hour_span_timestamp
+
+            if (not os.path.exists(dir_name)):
+                print(f"Creating directory {dir_name}")
+                if not(testing):
+                    os.mkdir(dir_name)
 
         if (file_cadence == "interval_hours"):
             for valid_dt in data_array["period_end_time"].values:
@@ -136,7 +139,7 @@ def write_data_array_to_netcdf(data_array, output_var_name, dir_name, fname_pref
                 file_timestamp = pd.Timestamp(valid_dt)
 
                 # Construct file path
-                fname = f"{fname_prefix}.{file_timestamp.strftime(timestamp_format)}.nc"
+                fname = f"{fname_prefix}.{file_timestamp.strftime(timestamp_format)}{hour_span_timestamp}.nc"
                 fpath = os.path.join(dir_name, fname)
 
                 # Write data to netCDF
@@ -162,7 +165,7 @@ def write_data_array_to_netcdf(data_array, output_var_name, dir_name, fname_pref
                 if (temporal_res == 24):
                     file_timestamp -= pd.Timedelta(days = 1)
 
-                fname = f"{fname_prefix}.{file_timestamp:%Y%m%d}.nc"
+                fname = f"{fname_prefix}.{file_timestamp:%Y%m%d}{hour_span_timestamp}.nc"
                 fpath = os.path.join(dir_name, fname)
 
                 # Write data to netCDF
@@ -187,7 +190,7 @@ def write_data_array_to_netcdf(data_array, output_var_name, dir_name, fname_pref
         
             file_timestamp = f"{start_file_timestamp.strftime(timestamp_format)}-{end_file_timestamp.strftime(timestamp_format)}"
 
-            fname = f"{fname_prefix}.{file_timestamp}.nc"
+            fname = f"{fname_prefix}.{file_timestamp}{hour_span_timestamp}.nc"
             fpath = os.path.join(dir_name, fname)
 
             # Write data to netCDF
@@ -249,33 +252,33 @@ class ReplayDataProcessor(object):
         self._calculate_sum_over_time_period()
 
     ##### GETTER METHODS (ReplayDataProcessor) #####
-    def get_model_variable_list(self):
+    def get_replay_variable_list(self):
         return self.variables_data_dict.keys()
 
-    def get_model_name(self):
+    def get_replay_name(self):
         return self.model_name
 
-    def get_model_data_array(self, var_name, summed = False):
+    def get_replay_data_array(self, var_name, summed = False):
         if summed:
             return self.summed_time_period_dict[var_name]
         return self.variables_data_dict[var_name]
 
-    def get_model_var_long_name(self, var_name, summed = False):
+    def get_replay_var_long_name(self, var_name, summed = False):
         if summed:
             return self.summed_time_period_dict[var_name].long_name
         return self.variables_data_dict[var_name].long_name
 
-    def get_model_var_short_name(self, var_name, summed = False):
+    def get_replay_var_short_name(self, var_name, summed = False):
         if summed:
             return self.summed_time_period_dict[var_name].short_name
         return self.variables_data_dict[var_name].short_name
 
-    def get_model_var_units(self, var_name, summed = False):
+    def get_replay_var_units(self, var_name, summed = False):
         if summed:
             return self.summed_time_perioed_dict[var_name].units
         return self.variables_data_dict[var_name].units
 
-    def get_model_precip_data(self, time_period_hours = 3, load = False):
+    def get_replay_precip_data(self, time_period_hours = 3, load = False):
         if (time_period_hours == self.temporal_res):
             data_array = self.variables_data_dict[utils.accum_precip_var_name]
         else:
@@ -286,6 +289,11 @@ class ReplayDataProcessor(object):
             data_array.load()
 
         return data_array 
+    
+    def how_to_get_replay_precip_data(self):
+        print("**** HOW TO GET REPLAY PRECIP DATA:")
+        print("Call get_replay_precip_data(time_period_hours = 3, load = False)")
+        print("The argument time_period_hours is an integer representing the desired temporal resolution in hours")
     
     ##### PRIVATE METHODS (ReplayDataProcessor) #####
     # If we're going to plot a time series, ensure we have the data we need to do so.
@@ -413,8 +421,8 @@ class ReplayDataProcessor(object):
     # Calculate sum over time period: take sum along date/time dimension at all spatial points  
     def _calculate_sum_over_time_period(self):
         self.summed_time_period_dict = {}
-        for var in self.get_model_variable_list():
-            data_array = self.get_model_data_array(var)
+        for var in self.get_replay_variable_list():
+            data_array = self.get_replay_data_array(var)
             if (utils.period_end_time_dim_str in data_array.dims): 
                 summed_data_array = data_array.sum(dim = utils.period_end_time_dim_str)
                 num_time_intervals = data_array[utils.period_end_time_dim_str].shape[0]
@@ -428,7 +436,7 @@ class ReplayDataProcessor(object):
                 short_name = f"{time_period}-hour precipitation"
                 long_name = f"Precipitation accumulated over the prior {time_period} hour(s)"
             else:
-                short_name = self.get_model_var_long_name(var)
+                short_name = self.get_replay_var_long_name(var)
                 long_name = data_array.long_name    
             add_attributes_to_data_array(summed_data_array,
                                          short_name = short_name,
@@ -441,11 +449,11 @@ class ReplayDataProcessor(object):
     ##### PUBLIC METHODS (ReplayDataProcessor) #####
     # Calculate mean of data summed over time period (useful for verifying mean total precip per day, etc.) 
     def calculate_mean_of_sum_over_time_period(self, var_name):
-        return self.get_model_data_array(var_name, summed = True).mean(dim = ["lon", "lat"])
+        return self.get_replay_data_array(var_name, summed = True).mean(dim = ["lon", "lat"])
   
     # Calculate mean of data summed over time period where data are non-zero 
     def calculate_mean_of_sum_over_time_period_nonzero(self, var_name):
-        data_array = self.get_model_data_array(var_name, summed = True)
+        data_array = self.get_replay_data_array(var_name, summed = True)
         return data_array.where(data_array > 0.0).mean(dim = ["lon", "lat"])
 
     # Take time series at a single lat/long point
@@ -454,7 +462,7 @@ class ReplayDataProcessor(object):
             print(f"Insufficient info to extract time series at point (e.g., missing lat/long)")
             return
 
-        data_array = self.get_model_data_array(var_name)
+        data_array = self.get_replay_data_array(var_name)
         time_series_point = data_array.sel(lon = self.plot_lon, lat = self.plot_lat, method = "nearest")
         return time_series_point
 
@@ -475,8 +483,8 @@ class ReplayDataProcessor(object):
         data_to_plot = self.calculate_time_series_at_point(var_name) 
         print(f"Number of data in time series: {data_to_plot.shape[0]}")
         
-        long_name = self.get_model_var_long_name(var_name)
-        units = self.get_model_var_units(var_name)
+        long_name = self.get_replay_var_long_name(var_name)
+        units = self.get_replay_var_units(var_name)
         title_string = f"{self.model_name}: {var_name} at {self.lat_lon_tuple_str} from {self.time_period_str}"
         fig_name = f"{self.model_name}.timeseries.{var_name}.lat{self.plot_lat:0.2f}.lon{self.plot_lon:0.2f}.{self.time_period_str}.png"
        
@@ -495,7 +503,7 @@ class ReplayDataProcessor(object):
 
     def write_replay_precip_data_to_netcdf(self, temporal_res = 3, file_cadence = "day", testing = False):
         # Get data to write
-        full_data_array = self.get_model_precip_data(time_period_hours = temporal_res, load = True)
+        full_data_array = self.get_replay_precip_data(time_period_hours = temporal_res, load = True)
 
         output_var_name = f"precipitation_{temporal_res}_hour"
         formatted_short_name = f"{temporal_res:02d}_hour_precipitation"
@@ -579,7 +587,7 @@ class ImergDataProcessor(ReplayDataProcessor):
                              user_dir = user_dir)
             self.model_name = model_name
             self.model_temporal_res = model_temporal_res
-            self.model_data_array = self.get_model_precip_data() 
+            self.model_data_array = self.get_replay_precip_data() 
             self._spatially_interpolate_imerg_to_model_grid()
 
     ##### GETTER METHODS (ImergDataProcessor) #####
@@ -629,6 +637,12 @@ class ImergDataProcessor(ReplayDataProcessor):
 
     def get_obs_name(self):
         return self.obs_name
+    
+    def how_to_get_precip_data(self):
+        print("**** HOW TO GET IMERG PRECIP DATA:")
+        print("Call get_precip_data(spatial_res = 'native', temporal_res = 'native', load = False)")
+        print("The argument spatial_res can be 'model' or 'native'")
+        print("The argument temporal_res can be 'native' or an integer representing the desired temporal resolution in hours")
  
     ##### PRIVATE METHODS (ImergDataProcessor) #####
     def _check_imerg_valid_dt_format(self, dt_str, exit = True):
@@ -919,7 +933,7 @@ class ERA5DataProcessor(ReplayDataProcessor):
                              user_dir = user_dir)
             self.model_name = model_name
             self.model_temporal_res = model_temporal_res
-            self.model_data_array = self.get_model_precip_data() 
+            self.model_data_array = self.get_replay_precip_data() 
             self._spatially_interpolate_era5_to_model_grid()
 
     ##### GETTER METHODS (ERA5DataProcessor) #####
@@ -951,6 +965,12 @@ class ERA5DataProcessor(ReplayDataProcessor):
 
     def get_obs_name(self):
         return self.obs_name
+    
+    def how_to_get_precip_data(self):
+        print("**** HOW TO GET ERA5 PRECIP DATA:")
+        print("Call get_precip_data(spatial_res = 'native', temporal_res = 'native', load = False)")
+        print("The argument spatial_res can be 'model' or 'native'")
+        print("The argument temporal_res can be 'native' or an integer representing the desired temporal resolution in hours")
  
     ##### PRIVATE METHODS (ERA5DataProcessor) #####
     def _construct_valid_dt_lists(self):
@@ -1164,7 +1184,7 @@ class AorcDataProcessor(ReplayDataProcessor):
                              user_dir = user_dir)
             self.model_name = model_name
             self.model_temporal_res = model_temporal_res
-            self.model_data_array = self.get_model_precip_data() 
+            self.model_data_array = self.get_replay_precip_data() 
             self._spatially_interpolate_aorc_to_model_grid()
 
     ##### GETTER METHODS (AorcDataProcessor) #####
@@ -1199,6 +1219,12 @@ class AorcDataProcessor(ReplayDataProcessor):
     def get_obs_name(self):
         return self.obs_name
  
+    def how_to_get_precip_data(self):
+        print("**** HOW TO GET AORC PRECIP DATA:")
+        print("Call get_precip_data(spatial_res = 'native', temporal_res = 'native', load = False)")
+        print("The argument spatial_res can be 'model' or 'native'")
+        print("The argument temporal_res can be 'native' or an integer representing the desired temporal resolution in hours")
+
     ##### PRIVATE METHODS (AorcDataProcessor) #####
     def _construct_valid_dt_lists(self):
         # Construct datetimes valid at end of each period (this is how AORC data are prsented)
@@ -1424,6 +1450,12 @@ class CONUS404DataProcessor(object):
             data_array.load()
 
         return data_array
+    
+    def how_to_get_precip_data(self):
+        print("**** HOW TO GET CONUS404 PRECIP DATA:")
+        print("Call get_precip_data(spatial_res = 'native', temporal_res = 'native', load = False)")
+        print("The argument spatial_res can be 'dest_grid' or 'native'")
+        print("The argument temporal_res can be 'native' or an integer representing the desired temporal resolution in hours")
 
     ##### PRIVATE METHODS (CONUS404DataProcessor) #####
     def _read_conus404_dataset_from_azure(self):
@@ -1667,6 +1699,12 @@ class NestedReplayDataProcessor(object):
             data_array.load()
 
         return data_array
+
+    def how_to_get_precip_data(self):
+        print("**** HOW TO GET NESTED REPLAY PRECIP DATA:")
+        print("Call get_precip_data(spatial_res = 'native', temporal_res = 'native', load = False)")
+        print("The argument spatial_res can be 'dest_grid' or 'native'")
+        print("The argument temporal_res can be 'native' or an integer representing the desired temporal resolution in hours")
 
     ##### PRIVATE METHODS (NestedReplayDataProcessor) #####
     def _construct_valid_dt_lists(self):
