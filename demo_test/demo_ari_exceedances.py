@@ -11,11 +11,14 @@ import utilities as utils
 import xarray as xr
 
 def create_ari_colorbar():
-    # color_list = ["white", "cyan", "blue", "green", "red", "purple"]
-    # bounds = [0,1,2,3,4,5,6]
-    color_list = ["white", "red"]
-    bounds = [0, 1, 2]
     #color_list = ["white", "yellow", "orange", "red", "purple"]
+    
+    color_list = ["white", "cyan", "blue", "green", "red", "purple"]
+    bounds = [0,1,2,3,4,5,6]
+    
+    #color_list = ["white", "red"]
+    #bounds = [0, 1, 2]
+    
     cmap = mpl.colors.ListedColormap(color_list)
     norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
 
@@ -64,5 +67,5 @@ for data_name, da in verif.da_dict.items():
 
 # Plot cumulative ARI exceedances
 cmap, bounds, norm = create_ari_colorbar()
-verif.plot_cmap_multi_panel(data_dict = ari_ex_dict, input_levels = bounds, cmap = cmap, is_ari_excd = True) 
+verif.plot_cmap_multi_panel(data_dict = ari_ex_dict, plot_levels = bounds, cmap = cmap) 
  

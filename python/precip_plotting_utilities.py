@@ -108,6 +108,16 @@ regions_info_dict = \
                 central_point = [-999.0, -999.0],
                 ),
 
+    "US-NorthEast": RegionPlottingConfiguration(
+                region_extent = [-92, -67, 36, 49], 
+                figsize_sp = (14, 10.5), 
+                figsize_mp = (14, 10.5), 
+                figsize_mp_5plus = (15, 8.5),
+                cm_mean_precip_range = np.arange(0, 6.5, 0.5), 
+                ts_mean_precip_range = np.arange(0, 8.5, 0.5),
+                central_point = [-999.0, -999.0],
+                ),
+
     "US-SouthEast": RegionPlottingConfiguration(
                 region_extent = [-95, -75, 24, 37], 
                 figsize_sp = (15, 11), 

@@ -562,10 +562,13 @@ class PrecipVerificationProcessor(object):
         return pearsonr
 
     # Calculate RMSE
-    # TODO: Should RMSE be confined to points above the threshold, like the other bulk stats??
     def calculate_rmse(self, model_precip, obs_precip):
         squared_errors = (model_precip - obs_precip)**2
-        return np.sqrt(squared_errors.mean().load()).item() 
+        return np.sqrt(squared_errors.mean().load()).item()
+
+    # Calculate mean amount bias
+    def calculate_bias(self, model_precip, obs_precip):
+        return (model_precip - obs_precip).mean().item()
     
     # Calculate hits
     def calculate_hits(self, threshold, model_precip, obs_precip):
@@ -1589,8 +1592,9 @@ class PrecipVerificationProcessor(object):
     # The input da_dict must have the same contents as self.data_dict: {da_name1: da1, ...., da_nameN, daN}
     # So, best practice is to have whatever data you want to plot exist as concatenated xarray DataArrays
     # with the proper time dimensions, as this method will make a plot for each coordinate of the time dimension.
-    def plot_cmap_multi_panel(self, data_dict = None, time_period_type = "monthly", stat_type = "mean", pctl = 99,
-                              single_colorbar = True, single_set_of_levels = True, input_levels = None, cmap = pputils.DEFAULT_PRECIP_CMAP, 
+    def plot_cmap_multi_panel(self, data_dict = None, plot_levels = np.arange(0, 85, 5),
+                              time_period_type = "monthly", stat_type = "mean", pctl = 99,
+                              single_colorbar = True, single_set_of_levels = True, cmap = pputils.DEFAULT_PRECIP_CMAP, 
                               plot_errors = False, write_to_nc = False):
         if (data_dict is None):
             if self.LOAD_DATA_FLAG: 
@@ -1608,8 +1612,8 @@ class PrecipVerificationProcessor(object):
         data_names_str = "".join(f"{key}." for key in data_dict.keys())
 
         # Get the contour levels for the plot
-        if (input_levels is not None):
-            levels = input_levels
+        if (plot_levels is not None):
+            levels = plot_levels
             _, error_levels = self._calculate_levels_for_cmap(data_dict)
         else: 
             levels, error_levels = self._calculate_levels_for_cmap(data_dict)

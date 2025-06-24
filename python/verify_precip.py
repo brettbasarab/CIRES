@@ -88,8 +88,8 @@ def main():
             agg_dict = verif.calculate_aggregated_stats(time_period_type = time_period_type, stat_type = "mean", agg_type = "time", write_to_nc = args.write_to_nc)
             if args.plot:
                 precip_range = pputils.regions_info_dict[verif.region].cm_mean_precip_range
-                verif.plot_cmap_multi_panel(data_dict = agg_dict, single_colorbar = True, single_set_of_levels = True, plot_errors = False, input_levels = precip_range)
-                verif.plot_cmap_multi_panel(data_dict = agg_dict, single_colorbar = False, single_set_of_levels = True, plot_errors = True, input_levels = precip_range)
+                verif.plot_cmap_multi_panel(data_dict = agg_dict, single_colorbar = True, single_set_of_levels = True, plot_errors = False, plot_levels = precip_range)
+                verif.plot_cmap_multi_panel(data_dict = agg_dict, single_colorbar = False, single_set_of_levels = True, plot_errors = True, plot_levels = precip_range)
 
             # 95th percentile
             agg_dict = verif.calculate_aggregated_stats(time_period_type = time_period_type, stat_type = "pctl", agg_type = "time", pctl = 95, write_to_nc = args.write_to_nc)
