@@ -409,7 +409,12 @@ class PrecipVerificationProcessor(object):
         for data_name, da in self.da_dict.items():
             # Keep time dimension in summmed data array so we are able to operate on this
             # dimension in various plotting method and related helper methods.
-            da_summed_time = da.sum(dim = utils.period_end_time_dim_str, keepdims = True)
+            # Also set min_count to the shape of the DataArray's time dimension, which requires
+            # that ALL data along this dimension be non-NaN to take the sum; otherwise, NaN is returned
+            da_summed_time = da.sum(dim = utils.period_end_time_dim_str,
+                                    keepdims = True,
+                                    skipna = True,
+                                    min_count = da.coords[utils.period_end_time_dim_str].shape[0])
             end_dt = pd.Timestamp(da[utils.period_end_time_dim_str].values[-1])
             da_summed_time.coords[utils.period_end_time_dim_str] = [end_dt]
  
@@ -1987,7 +1992,7 @@ class PrecipVerificationProcessor(object):
             # Format plot and save figure
             plt.title(f"{self.truth_data_name} vs. {data_name} scatter plot: {da.short_name}, {self.daily_time_period_str}", size = 15)
             plt.grid(True, linewidth = 0.5, linestyle = "dashed")
-            axes_labels, _, _, _ = self._calculate_levels_for_cmap({data_name: da, self.truth_data_name: self.truth_da})
+            axes_labels, _ = self._calculate_levels_for_cmap({data_name: da, self.truth_data_name: self.truth_da})
             plot_lims = [axes_labels[0], axes_labels[-1]] 
             plt.xlim(plot_lims)
             plt.ylim(plot_lims)
