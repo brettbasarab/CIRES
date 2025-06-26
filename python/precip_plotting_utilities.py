@@ -632,10 +632,10 @@ def plot_cmap_single_panel(data_array, data_name, region, plot_levels, short_nam
         # Set up the figure
         plt.figure(figsize = regions_info_dict[region].figsize_sp)
         axis = plt.axes(projection = map_proj)
-        add_cartopy_features_to_map_proj(axis, region, data_proj, draw_labels = True)
+        add_cartopy_features_to_map_proj(axis, region, data_proj, draw_labels = False)
 
         # Plot the data
-        plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, extend = "max", transform = data_proj, cmap = cmap,
+        plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, extend = "both", transform = data_proj, cmap = cmap,
                                         x = xy_coords.x, y = xy_coords.y, 
                                         cbar_kwargs = {"orientation": "horizontal", "ticks": plot_levels})
 
