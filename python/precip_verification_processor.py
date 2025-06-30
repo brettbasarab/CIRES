@@ -627,12 +627,15 @@ class PrecipVerificationProcessor(object):
         # Process stat_type: eventual attributes of aggregated data arrays
         short_name = self.truth_da.short_name
         long_name = self.truth_da.long_name
+        time_period_type_str = ""
+        if (time_period_type is not None):
+            time_period_type_str = f"{time_period_type} "
         match stat_type:
             case "mean":
-                short_name = short_name + f" {time_period_type} {stat_type}"
-                long_name = f"{time_period_type.title()} {stat_type} of " + long_name 
+                short_name = short_name + f" {time_period_type_str}{stat_type}"
+                long_name = f"{time_period_type_str.title()}{stat_type} of " + long_name 
             case "pctl":
-                short_name = short_name + f" {time_period_type} {pctl:0.1f}th {stat_type}"
+                short_name = short_name + f" {time_period_type_str}{pctl:0.1f}th {stat_type}"
                 long_name = f"{pctl:0.1f}th {stat_type} of " + long_name
             case _:
                 print(f"Error: Unrecognized stat type {stat_type}")
@@ -640,8 +643,11 @@ class PrecipVerificationProcessor(object):
 
         agg_data_dict = {}
         for data_name, da in input_da_dict.items():
-            # Convert data coordinates to period beginning (much easier to aggregate over months that way)
-            data_array = self._convert_period_end_to_period_begin(da)
+            # Convert data coordinates to period beginning (easier to aggregate over different time periods this way)
+            if (time_period_type is not None):
+                data_array = self._convert_period_end_to_period_begin(da)
+            else:
+                data_array = da
 
             # If aggregating seasonally, dtimes, which in this case will be a list of lists defining
             # seasonal datetime ranges, wasn't defined above.
@@ -1054,9 +1060,13 @@ class PrecipVerificationProcessor(object):
     # Based on time_period_type ('monthly', etc.), determine list of dtimes, dimension names, and time period string
     def _process_time_period_type_to_dtimes(self, time_period_type):
         match time_period_type:
+            case None: # Don't do any temporal aggregation
+                dtimes = self.valid_dt_list
+                dim_name = utils.period_begin_time_dim_str
+                time_period_str = self.daily_time_period_str
             case "daily":
                 dtimes = self.valid_daily_dt_list_period_begin # Need period beginning times for daily data
-                dim_name = "days"
+                dim_name = utils.days_dim_str 
                 time_period_str = self.daily_time_period_str_period_begin
             case "monthly":
                 dtimes = self.valid_monthly_dt_list
@@ -1107,6 +1117,9 @@ class PrecipVerificationProcessor(object):
 
         return data_array_period_begin
 
+    def _convert_period_begin_to_period_end(self, data_array):
+        pass 
+
     # Returns a list of date-time ranges corresponding to each season valid within
     # the time dimension of the input data array.
     def _construct_season_dt_ranges(self, da):
@@ -1139,10 +1152,15 @@ class PrecipVerificationProcessor(object):
     # filter a DataArray to only data within the current dtime, to be subsequently aggregated.
     def _determine_agg_data_from_time_period_type(self, data_array, time_period_type, dtime):
         match time_period_type:
+            case None:
+                dtime_str = f"{dtime:%Y-%m-%d %H:%M:%S}"
+                data_to_aggregate = data_array.sel(period_end_time = dtime_str)
+                # If working with daily (as opposed to sub-daily) data, the .sel call above will remove the time dimension. Use expand_dims to add it back.
+                if (len(data_to_aggregate.shape) == 2):
+                    data_to_aggregate = data_to_aggregate.expand_dims(dim = {utils.period_begin_time_dim_str: [dtime]})
             case "daily":
                 dtime_str = f"{dtime:%Y-%m-%d}"
                 data_to_aggregate = data_array.sel(period_begin_time = dtime_str)
-                # If working with daily (as opposed to sub-daily) data, the .sel call above will remove the time dimension. Use expand_dims to add it back.
                 if (len(data_to_aggregate.shape) == 2):
                     data_to_aggregate = data_to_aggregate.expand_dims(dim = {utils.period_begin_time_dim_str: [dtime]})
             case "monthly":
@@ -1536,6 +1554,9 @@ class PrecipVerificationProcessor(object):
             print(f"Saving {fig_path}")
             plt.savefig(fig_path)
 
+    def how_to_plot_fss_timeseries(self):
+        print("plot_fss_timeseries(eval_radius, eval_threshold)")
+
     # Plot time series of FSS for each valid time (i.e., each individual grid evaluation)
     def plot_fss_timeseries(self, eval_radius, eval_threshold):
         if not(hasattr(self, "fss_dict_by_radius")) or not(hasattr(self, "fss_dict_by_threshold")):
@@ -1582,18 +1603,27 @@ class PrecipVerificationProcessor(object):
             plt.plot(da.period_end_time.values, da, color = pputils.time_series_color_dict[data_name], linewidth = 2, label = data_name)  
 
         # Save figure
+        plt.tight_layout()
         plt.legend(loc = "best", prop = {"size": 15})
         fig_name = f"FSStimeseries.{self.data_names_str}radius{eval_radius:0.2f}{self.fss_eval_radius_units}.threshold{eval_threshold:0.1f}mm.{short_name}.{self.daily_time_period_str}.{self.region}.png"
         fig_path = os.path.join(self.plot_output_dir, fig_name)
         print(f"Saving {fig_path}")
         plt.savefig(fig_path)
 
+    def how_to_plot_cmap_multi_panel(self):
+        print("NOTE: If data_dict is passed it will be used directly, without aggregation using time_period_type.\n"
+              "So, the contents of data_dict must already be properly aggregated for desired cmaps.")
+        print('plot_cmap_multi_panel(data_dict = None, plot_levels = np.arange(0, 85, 5),\n'
+              '                      time_period_type = None, stat_type = "mean", pctl = 99,\n'
+              '                      single_colorbar = True, single_set_of_levels = True, cmap = pputils.DEFAULT_PRECIP_CMAP,\n'
+              '                      plot_errors = False, write_to_nc = False)')
+
     # Contour maps with the correct number of panels, with the "truth" dataset always in the top left
     # The input da_dict must have the same contents as self.data_dict: {da_name1: da1, ...., da_nameN, daN}
     # So, best practice is to have whatever data you want to plot exist as concatenated xarray DataArrays
     # with the proper time dimensions, as this method will make a plot for each coordinate of the time dimension.
     def plot_cmap_multi_panel(self, data_dict = None, plot_levels = np.arange(0, 85, 5),
-                              time_period_type = "monthly", stat_type = "mean", pctl = 99,
+                              time_period_type = None, stat_type = "mean", pctl = 99,
                               single_colorbar = True, single_set_of_levels = True, cmap = pputils.DEFAULT_PRECIP_CMAP, 
                               plot_errors = False, write_to_nc = False):
         if (data_dict is None):
@@ -1723,7 +1753,13 @@ class PrecipVerificationProcessor(object):
             print(f"Saving {fig_path}")
             plt.savefig(fig_path)
 
-    def plot_timeseries(self, data_dict = None, time_period_type = "monthly", stat_type = "mean", pctl = 99, write_to_nc = False,
+    def how_to_plot_timeseries(self):
+        print("NOTE: If data_dict is passed it will be used directly, without aggregation using time_period_type.\n"
+              "So, the contents of data_dict must already be properly aggregated for a time series.")
+        print('plot_timeseries(data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, write_to_nc = False,\n'
+              '                ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True)')
+
+    def plot_timeseries(self, data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, write_to_nc = False,
                         ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True):
         if (data_dict is None):
             if self.LOAD_DATA_FLAG:
@@ -1731,7 +1767,7 @@ class PrecipVerificationProcessor(object):
                                                             stat_type = stat_type,
                                                             agg_type = "space_time",
                                                             pctl = pctl,
-                                                            write_to_nc = write_to_nc) 
+                                                            write_to_nc = write_to_nc)
             else:
                 data_dict = self.da_dict
 
@@ -1745,17 +1781,23 @@ class PrecipVerificationProcessor(object):
                 yticks = pputils.variable_pctl_plot_limits("accum_precip", self.temporal_res)
                 axis_label = pdp.format_short_name(truth_da)
             case "mean": 
-                title_string = f"{stat_type}, {self.region}"
+                title_string = f"{stat_type.title()}, {self.region}"
                 fig_name_prefix = "mean"
                 yticks = pputils.regions_info_dict[self.region].ts_mean_precip_range
-                if (time_period_type == "daily"):
-                    yticks *= 2.0 
+                if (time_period_type == None) or (time_period_type == "daily"):
+                    yticks = 2.0 * np.copy(yticks) 
                 axis_label = self._format_short_short_name(truth_da)
             case _:
                 raise NotImplementedError
 
-        fig_name_prefix = f"{time_period_type}_{fig_name_prefix}"
+        if (time_period_type is not None):
+            fig_name_prefix = f"{time_period_type}_{fig_name_prefix}"
+
         match time_period_type:
+            case None:
+                time_period_str = self.daily_time_period_str
+                title_string = f"{title_string}: {time_period_str}"
+                xlabel = "Period end time"
             case "daily":
                 time_period_str = self.daily_time_period_str_period_begin 
                 title_string = f"Daily {title_string}: {time_period_str}"
@@ -1805,6 +1847,11 @@ class PrecipVerificationProcessor(object):
             xticks = dtimes[::4]
 
         if (dt_format != ""):
+            if (time_period_type == None):
+                if (self.temporal_res == 24):
+                    dt_format = "%m/%d"
+                else:
+                    dt_format = "%m/%d %H"
             xtick_labels = [xtick.strftime(dt_format) for xtick in xticks]
         else:
             xtick_labels = [xtick for xtick in xticks]
