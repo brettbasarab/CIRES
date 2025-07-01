@@ -591,7 +591,7 @@ def determine_if_has_time_dim(data_array):
     return False
 
 # For each time in the data array, create a single-paneled contour plot of precipitation
-def plot_cmap_single_panel(data_array, data_name, region, plot_levels, short_name = "precip_data", 
+def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arange(0, 85, 5), short_name = "precip_data", 
                            temporal_res = "native",  proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP):
     match proj_name:
         case "LambertConformal":

@@ -9,7 +9,6 @@ import numpy as np
 import os
 import pandas as pd
 import planetary_computer
-import plot_conus404
 import precip_plotting_utilities as pputils
 import pystac_client
 import sys
@@ -36,6 +35,9 @@ def main():
 
     if not(args.read_azure):
         conus404_native_fpath = os.path.join(nc_testing_dir, "conus404_native.nc")
+        if not(os.path.exists(conus404_native_fpath)):
+            print(f"Error: Input CONUS404 file to interpolate {conus404_native_fpath} does not exist")
+            sys.exit(1)
 
         # Regrid CONUS404 to 0.1 degree rectilinear grid
         if (args.dest_grid == "0.1deg"):
@@ -66,19 +68,19 @@ def main():
         # Read and plot CONUS404 data on native grid
         print(f"Reading {conus404_native_fpath} (CONUS404 data on native grid)")
         conus404_native = xr.open_dataset(conus404_native_fpath).accum_precip
-        plot_conus404.plot_conus404(conus404_native, plot_name = "CONUS404.native", region = "CONUS") 
+        pputils.plot_cmap_single_panel(conus404_native, "CONUS404.native", "CONUS") 
 
         # Read and plot CONUS404 interpolated by cdo command above
         print(f"Reading {conus404_output_fpath}")
         conus404_interp = xr.open_dataset(conus404_output_fpath).accum_precip # Replay grid
-        plot_conus404.plot_conus404(conus404_interp, plot_name = f"CONUS404.{plot_name}.{args.interp_type}", region = "CONUS")
+        pputils.plot_cmap_single_panel(conus404_interp, f"CONUS404.{plot_name}.{args.interp_type}", "CONUS")
 
     if args.read_azure:
         # Read data from zarr archive
         conus404_ds = read_conus404_dataset_from_azure()
         conus404_da = conus404_ds.PREC_ACC_NC
         start_dt = dt.datetime(2018,9,13,1)
-        end_dt = dt.datetime(2018,9,19,0)
+        end_dt = dt.datetime(2018,9,20,0)
         accum_precip_data_array = conus404_da.loc[f"{start_dt:%Y-%m-%d %H:%M:%S}":f"{end_dt:%Y-%m-%d %H:%M:%S}"]
         accum_precip_data_array = accum_precip_data_array.rename({utils.time_dim_str: utils.period_end_time_dim_str})
 
@@ -89,12 +91,12 @@ def main():
         precip24.name = utils.accum_precip_var_name
 
         # Output 24-hour precipitation to netCDF
-        native_fname = "conus404_native.20180914-20180919.nc"
+        native_fname = "conus404_native.20180914-20180920.nc"
         native_fpath = os.path.join(nc_testing_dir, native_fname) 
         precip24.to_netcdf(native_fpath)
 
         # Regrid 24-hour precipitation on native CONUS404 grid to Replay grid
-        output_fname = f"conus404_replay_grid.20180914-20180919.{args.interp_type}.nc"
+        output_fname = f"conus404_replay_grid.20180914-20180920.{args.interp_type}.nc"
         output_fpath = os.path.join(nc_testing_dir, output_fname)
         cmd = f"cdo -P 8 {cdo_interp_type},{template_fpath} {native_fpath} {output_fpath}"
         os.system(cmd)
@@ -102,8 +104,8 @@ def main():
         # Plotting
         conus404_native = xr.open_dataset(native_fpath).accum_precip
         conus404_replay_grid = xr.open_dataset(output_fpath).accum_precip 
-        plot_conus404.plot_conus404(conus404_native, plot_name = f"CONUS404.native.{args.interp_type}", region = "CONUS") 
-        plot_conus404.plot_conus404(conus404_replay_grid, plot_name = f"CONUS404.replay_grid.{args.interp_type}", region = "CONUS")
+        pputils.plot_cmap_single_panel(conus404_native, f"CONUS404.native.{args.interp_type}", "CONUS") 
+        pputils.plot_cmap_single_panel(conus404_replay_grid, f"CONUS404.replay_grid.{args.interp_type}", "CONUS")
 
 def set_cdo_interpolation_type(args_flag):
     match args_flag:

@@ -1685,11 +1685,7 @@ class PrecipVerificationProcessor(object):
 
             # Loop through each of the subplot axes defined above (one axis for each DataArray) and plot the data 
             for axis, (data_name, da) in zip(axes_list, data_dict.items()):
-                axis.coastlines()
-                axis.set_extent(self.region_extent, crs = proj)
-                axis.add_feature(cfeature.BORDERS)
-                if ("US" in self.region):
-                    axis.add_feature(cfeature.STATES)
+                pputils.add_cartopy_features_to_map_proj(axis, self.region, proj, draw_labels = False)
 
                 if (plot_errors) and (data_name != self.truth_data_name):
                     data_to_plot = (da - truth_da).loc[loc_str]
@@ -1724,8 +1720,6 @@ class PrecipVerificationProcessor(object):
                     plot_handle.colorbar.ax.set_xticklabels(cbar_tick_labels, rotation = cbar_tick_labels_rotation) 
                     plot_handle.colorbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
 
-                gl = axis.gridlines(crs = proj, color = "gray", alpha = 0.5, draw_labels = False,
-                                    linewidth = 0.5, linestyle = "dashed")
                 axis.set_title(subplot_title, fontsize = 16 + self.poster_font_increase)
 
             formatted_short_name = pdp.format_short_name(truth_da)
