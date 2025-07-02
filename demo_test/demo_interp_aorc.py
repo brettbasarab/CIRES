@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
 import argparse
+import dataclasses
 import datetime as dt
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
@@ -16,6 +18,11 @@ nc_dir = "/data/bbasarab/netcdf"
 nc_testing_dir = os.path.join(nc_dir, "testing")
 template_fpath = os.path.join(nc_dir, "TemplateGrids", "ReplayGrid.nc")
 
+@dataclasses.dataclass
+class CDF:
+    quantiles: float
+    values: float
+
 def main():
     utils.suppress_warnings()
     parser = argparse.ArgumentParser(description = "Interpolate AORC data using cdo command line utility; plot native and interpolated data")
@@ -25,107 +32,149 @@ def main():
                         help = "Temporal resolution of data to interpolate in hours; default 24")
     parser.add_argument("-i", "--interp", dest = "interp", action = "store_true", default = False,
                         help = "Set to run interpolation")
+    parser.add_argument("-c", "--cdfs", dest = "cdfs", action = "store_true", default = False,
+                        help = "Set to create and plot CDFs")
     parser.add_argument("-p", "--plot", dest = "plot", action = "store_true", default = False,
-                        help = "Set to make plots")
+                        help = "Set to make contour maps to visualize differences between interpolated datasets")
     args = parser.parse_args()
 
     current_dt = dt.datetime.strptime(args.dt_str, "%Y%m%d")
 
-    aorc_native_fpath = os.path.join(nc_testing_dir, f"prate.aorc.{current_dt:%Y%m%d}.nc")
-    if not(os.path.exists(aorc_native_fpath)):
-        print(f"Error: Input AORC file to interpolate {aorc_native_fpath} does not exist")
+    fpath_native = os.path.join(nc_testing_dir, f"prate.aorc.{current_dt:%Y%m%d}.nc")
+    if not(os.path.exists(fpath_native)):
+        print(f"Error: Input AORC file to interpolate {fpath_native} does not exist")
         sys.exit(1)
 
     if (args.temporal_res == 1):
-        # Set interpolation type to be used by cdo
-        cdo_interp_type = set_cdo_interpolation_type(args.interp_type) 
+        ##### Interpolate 1-hour precip to Replay grid
+        # Bilinear
+        fpath_bil = run_cdo_interpolation("bilinear", current_dt, fpath_native, 
+                                          do_interp = args.interp, temporal_res = args.temporal_res) 
 
-        # Regrid AORC to Replay grid, using Replay data itself as the template
-        aorc_output_fpath = os.path.join(nc_testing_dir, f"AORC.ReplayGrid.{args.interp_type}.{current_dt:%Y%m%d}.nc")
-        cdo_cmd = f"cdo -P 8 {cdo_interp_type},{template_fpath} {aorc_native_fpath} {aorc_output_fpath}"
+        # Conservative
+        fpath_con = run_cdo_interpolation("conservative", current_dt, fpath_native,
+                                          do_interp = args.interp, temporal_res = args.temporal_res) 
+        
+        # Nearest neighbor
+        fpath_nbr = run_cdo_interpolation("nearest", current_dt, fpath_native,
+                                          do_interp = args.interp, temporal_res = args.temporal_res) 
 
-        # Run cdo command
-        print(f"Running: {cdo_cmd}")
-        ret = os.system(cdo_cmd)
-        if (ret != 0):
-            print("Error: cdo interpolation command did not work")
-            sys.exit(1)
+        # Read netCDFs containing hourly precip data
+        precip_native = rename_dims(xr.open_dataset(fpath_native).prate)
+        precip_bil = xr.open_dataset(fpath_bil).prate
+        precip_con = xr.open_dataset(fpath_con).prate
+        precip_nbr = xr.open_dataset(fpath_nbr).prate
+        
+        # Mask data to CONUS for easier comparison to output from precip_data_processors.py
+        conus_mask_native = pputils.create_conus_mask(precip_native)
+        conus_mask_replay = pputils.create_conus_mask(precip_bil)
+        precip_native = precip_native.where(conus_mask_native)
+        precip_bil = precip_bil.where(conus_mask_replay)
+        precip_con = precip_con.where(conus_mask_replay)
+        precip_nbr = precip_nbr.where(conus_mask_replay)
+
+        # Create final DataArray dictionary
+        data_dict = {"Native": precip_native, "Bilinear": precip_bil, "Conservative": precip_con, "Nearest": precip_nbr}
        
+        ##### Plot 1-hour AORC data
         if args.plot: 
-            # Read and plot AORC data on native grid
-            print(f"Reading {aorc_native_fpath} (AORC data on native grid)")
-            aorc_native = xr.open_dataset(aorc_native_fpath).prate
-            pputils.plot_cmap_single_panel(aorc_native, "AORC.native", "CONUS") 
+            # Native grid 
+            pputils.plot_cmap_single_panel(precip_native, "AORC.native", "CONUS", plot_levels = np.arange(0, 42, 2)) 
 
-            # Read and plot AORC interpolated by cdo command above
-            print(f"Reading {aorc_output_fpath} (AORC data on Replay grid)")
-            aorc_interp = xr.open_dataset(aorc_output_fpath).prate
-            pputils.plot_cmap_single_panel(aorc_interp, f"AORC.ReplayGrid.{args.interp_type}", "CONUS")
+            # Bilinear 
+            pputils.plot_cmap_single_panel(precip_bil, f"AORC.ReplayGrid.bilinear", "CONUS", plot_levels = np.arange(0, 42, 2))
+
+            # Conservative 
+            pputils.plot_cmap_single_panel(precip_con, f"AORC.ReplayGrid.conservative", "CONUS", plot_levels = np.arange(0, 42, 2))
+        
+            # Nearest
+            pputils.plot_cmap_single_panel(precip_nbr, f"AORC.ReplayGrid.nearest", "CONUS", plot_levels = np.arange(0, 42, 2))
     elif (args.temporal_res == 24):
-        # First, we need to calculate 24-hourly AORC data. Since data are period-ending, but each file
-        # contains data from 00z to 23z, we need to get two separate files to get data ending at 01z
-        # to data ending at 00z (the next day).
+        # Calculate 24-hourly AORC data. Since data are period-ending, but each file
+        # contains data from 00z to 23z, we need to get two separate files to get data
+        # ending at 01z to data ending at 00z (the next day).
         current_dt_p1 = current_dt + dt.timedelta(days = 1)
-        aorc_native_fpath_p1 = os.path.join(nc_testing_dir, f"prate.aorc.{current_dt_p1:%Y%m%d}.nc")
-        if not(os.path.exists(aorc_native_fpath_p1)):
-            print(f"Error: Input AORC file to interpolate {aorc_native_fpath_p1} does not exist")
+        fpath_native_p1 = os.path.join(nc_testing_dir, f"prate.aorc.{current_dt_p1:%Y%m%d}.nc")
+        if not(os.path.exists(fpath_native_p1)):
+            print(f"Error: Input AORC file to interpolate {fpath_native_p1} does not exist")
             sys.exit(1)
-
-        precip = xr.open_mfdataset([aorc_native_fpath, aorc_native_fpath_p1]).prate
+        precip = xr.open_mfdataset([fpath_native, fpath_native_p1]).prate
         precip = precip.rename({utils.time_dim_str: utils.period_end_time_dim_str})
         precip = precip.loc[f"{current_dt:%Y-%m-%d 01:00:00}":f"{current_dt_p1:%Y-%m-%d 00:00:00}"]
 
         # Output 24-hour precip at native spatial resolution to netCDF
-        accum_precip24 = calculate_24hr_accum_precip(precip)
-        fpath_native = os.path.join(nc_testing_dir, f"AORC.NativeGrid.24_hour_precipitation.{current_dt:%Y%m%d}.nc")
-        print(f"Writing 24-hour precip at native resolution to {fpath_native}")
+        accum_precip24 = convert_from_dask_array(calculate_24hr_accum_precip(precip))
+        fpath_native24 = os.path.join(nc_testing_dir, f"AORC.NativeGrid.24_hour_precipitation.{current_dt:%Y%m%d}.nc")
+        print(f"Writing 24-hour precip at native resolution to {fpath_native24}")
         accum_precip24.period_end_time.encoding["units"] = utils.seconds_since_unix_epoch_str
-        accum_precip24.to_netcdf(fpath_native)
+        accum_precip24.to_netcdf(fpath_native24)
+        accum_precip24 = rename_dims(accum_precip24)
 
         ##### Interpolate 24-hour precip to Replay grid
         # Bilinear
-        fpath_bil = run_cdo_interpolation("bilinear", current_dt, fpath_native) 
+        fpath_bil = run_cdo_interpolation("bilinear", current_dt, fpath_native24,
+                                          do_interp = args.interp, temporal_res = args.temporal_res)
 
         # Conservative
-        fpath_con = run_cdo_interpolation("conservative", current_dt, fpath_native)
+        fpath_con = run_cdo_interpolation("conservative", current_dt, fpath_native24,
+                                          do_interp = args.interp, temporal_res = args.temporal_res)
         
         # Nearest neighbor
-        fpath_nbr = run_cdo_interpolation("nearest", current_dt, fpath_native)
+        fpath_nbr = run_cdo_interpolation("nearest", current_dt, fpath_native24,
+                                          do_interp = args.interp, temporal_res = args.temporal_res)
        
-        ##### Read netCDFs containing interpolated data 
+        ##### Read netCDFs containing 24-hour precip data 
         accum_precip24_bil = xr.open_dataset(fpath_bil).accum_precip
         accum_precip24_con = xr.open_dataset(fpath_con).accum_precip
         accum_precip24_nbr = xr.open_dataset(fpath_nbr).accum_precip
+
+        # Mask data to CONUS for easier comparison to output from precip_data_processors.py
+        conus_mask_native = pputils.create_conus_mask(accum_precip24)
+        conus_mask_replay = pputils.create_conus_mask(accum_precip24_bil)
+        accum_precip24 = accum_precip24.where(conus_mask_native)
+        accum_precip24_bil = accum_precip24_bil.where(conus_mask_replay)
+        accum_precip24_con = accum_precip24_con.where(conus_mask_replay)
+        accum_precip24_nbr = accum_precip24_nbr.where(conus_mask_replay)
+
+        # Create final DataArray dictionary
+        data_dict = {"Native": accum_precip24, "Bilinear": accum_precip24_bil, "Conservative": accum_precip24_con, "Nearest": accum_precip24_nbr}
         
         ##### Plot 24-hour AORC data
         if args.plot:
             # Native grid 
-            pputils.plot_cmap_single_panel(accum_precip24, "AORC.NativeGrid", "CONUS", plot_levels = np.arange(0, 125, 5)) 
+            pputils.plot_cmap_single_panel(accum_precip24, "AORC.NativeGrid", "CONUS", plot_levels = np.arange(0, 85, 5)) 
             
             # Bilinear
-            pputils.plot_cmap_single_panel(accum_precip24_bil, f"AORC.ReplayGrid.bilinear", "CONUS", plot_levels = np.arange(0, 125, 5))
+            pputils.plot_cmap_single_panel(accum_precip24_bil, f"AORC.ReplayGrid.bilinear", "CONUS", plot_levels = np.arange(0, 85, 5))
 
             # Conservative
-            pputils.plot_cmap_single_panel(accum_precip24_con, f"AORC.ReplayGrid.conservative", "CONUS", plot_levels = np.arange(0, 125, 5))
+            pputils.plot_cmap_single_panel(accum_precip24_con, f"AORC.ReplayGrid.conservative", "CONUS", plot_levels = np.arange(0, 85, 5))
 
             # Nearest neighbor
-            pputils.plot_cmap_single_panel(accum_precip24_nbr, f"AORC.ReplayGrid.nearest", "CONUS", plot_levels = np.arange(0, 125, 5))
+            pputils.plot_cmap_single_panel(accum_precip24_nbr, f"AORC.ReplayGrid.nearest", "CONUS", plot_levels = np.arange(0, 85, 5))
 
-        ##### Calculate stats
-        data_dict = {"Native": accum_precip24, "Bilinear": accum_precip24_bil, "Conservative": accum_precip24_con, "Nearest": accum_precip24_nbr}
+        if args.cdfs:
+            # Create CDFs
+            print("Creating CDFs")
+            cdf_native = create_cdf(accum_precip24)
+            cdf_bil = create_cdf(accum_precip24_bil)
+            cdf_con = create_cdf(accum_precip24_con)
+            cdf_nbr = create_cdf(accum_precip24_nbr)
 
-        for data_name, da in data_dict.items():
-            print(f"{data_name}:")
-            print(f"Min: {np.nanmin(da.values)}")
-            print(f"Max: {np.nanmax(da.values)}")
-            print(f"Mean: {np.nanmean(da.values)}")
-            print(f"Median: {np.median(da.values)}")
-            #print(f"Min: {da.min().item()}")
-            #print(f"Max: {da.max().item()}")
-            #print(f"Mean: {da.mean().item()}")
-            #print(f"Median: {da.median().item()}")
+            # Plot CDFs
+            print("Plotting CDFs")
+            cdf_dict = {"Native": cdf_native, "Bilinear": cdf_bil, "Conservative": cdf_con, "Nearest": cdf_nbr}
+            plot_cdf(cdf_dict, current_dt)
+
+    ##### Calculate stats
+    for data_name, da in data_dict.items():
+        print(f"***** {data_name}:")
+        print(f"Min: {da.min().item()}")
+        print(f"Max: {da.max().item()}")
+        print(f"Mean: {da.mean().item()}")
+        print(f"Median: {da.median().item()}")
         
-        return data_dict
+    return data_dict
 
 def calculate_24hr_accum_precip(hourly_aorc_data):
     # Calculate 24-hour precipitation from hourly precipitation
@@ -148,14 +197,16 @@ def set_cdo_interpolation_type(args_flag):
             return "remapcon"
         case "conservative2": # Second-order conservative interpolation
             return "remapcon2"
-        case "nearest_neighbor": # Nearest-neighbor interpolation
+        case "nearest": # Nearest-neighbor interpolation
             return "remapnn"
         case _:
             print(f"Unrecognized interpolation type {args_flag}; will perform bilinear interpolation")
             return "remapbil"
 
-def run_cdo_interpolation(interp_type, dtime, input_fpath):
-    output_fpath = os.path.join(nc_testing_dir, f"AORC.ReplayGrid.24_hour_precipitation.{interp_type}.{dtime:%Y%m%d}.nc")
+def run_cdo_interpolation(interp_type, dtime, input_fpath, temporal_res = 24, do_interp = True):
+    output_fpath = os.path.join(nc_testing_dir, f"AORC.ReplayGrid.{temporal_res:02d}_hour_precipitation.{interp_type}.{dtime:%Y%m%d}.nc")
+    if not(do_interp): # Option to return output file path only without running interpolation
+        return output_fpath
 
     cdo_interp_flag = set_cdo_interpolation_type(interp_type)
 
@@ -167,6 +218,47 @@ def run_cdo_interpolation(interp_type, dtime, input_fpath):
         sys.exit(1)
 
     return output_fpath
+
+def rename_dims(data_array):
+    return data_array.rename({
+                             "latitude": "lat",
+                             "longitude": "lon",
+                             }) 
+
+# TODO: Understand why the instances where I need to apply this function
+# are dask arrays in the first place, and whether there's a more elegant way to
+# handle them (can't call basic methods like .quantile(), .item() due to the structure of dask arrays)
+def convert_from_dask_array(dask_array):
+    da = xr.DataArray(dask_array.values, dims = dask_array.dims, coords = dask_array.coords,
+                      attrs = dask_array.attrs)
+    da.name = "accum_precip"
+
+    return da
+
+def create_cdf(data_array):
+    quantiles = np.concatenate(( np.arange(0.0, 1.0, 0.01), np.arange(0.991, 1.0, 0.001) ))
+    values = np.array([data_array.quantile(i).item() for i in quantiles])
+
+    return CDF(quantiles = quantiles, values = values)
+
+def plot_cdf(cdf_dict, dtime, temporal_res = 24, skip_nearest = True): 
+    plt.figure(figsize = (10, 10))
+    plt.grid(True, linewidth = 0.5)
+    plt.xlabel("Precip amount (mm)", size = 15)
+    plt.ylabel("Probability", size = 15)
+    plt.gca().set_xticks(np.arange(0, 85, 5))
+    plt.gca().set_yticks(np.arange(0, 1.1, 0.1))
+    plt.xlim(0, 30)
+    plt.ylim(0.7, 1.0)
+    plt.title(f"CDFs of native and upscaled AORC grids: {temporal_res:02d}-hour precip, valid {dtime:%Y%m%d}", size = 15)
+    for cdf_name, cdf in cdf_dict.items():
+        if (skip_nearest and cdf_name == "Nearest"):
+            continue 
+        plt.plot(cdf_dict[cdf_name].values, cdf_dict[cdf_name].quantiles, linewidth = 2, label = cdf_name)
+    plt.legend(loc = "best", prop = {"size": 15})
+    fig_fpath = os.path.join(utils.plot_output_dir, f"CDF.AORC.{temporal_res:02d}_hour_precipitation.{dtime:%Y%m%d}.png")
+    print(f"Saving {fig_fpath}") 
+    plt.savefig(fig_fpath)
 
 if __name__ == "__main__":
     data_dict = main() 

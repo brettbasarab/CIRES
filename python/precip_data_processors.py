@@ -1140,7 +1140,8 @@ class ERA5DataProcessor(ReplayDataProcessor):
 class AorcDataProcessor(ReplayDataProcessor):
     def __init__(self, start_dt_str, end_dt_str,
                        obs_name = "AORC",
-                       native_data_dir = "/Projects/BIL/Extreme_Intercomp/AORC",
+                       #native_data_dir = "/Projects/BIL/Extreme_Intercomp/AORC", # /Projects/BIL area with time offset
+                       native_data_dir = "/Projects/AORC_CONUS_4km",
                        obs_temporal_res = 1, 
                        MODEL_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
                        model_temporal_res = 3,
@@ -1253,7 +1254,8 @@ class AorcDataProcessor(ReplayDataProcessor):
     def _construct_input_file_list(self):
         self.input_file_list = []
         for valid_dt in self.daily_dt_list:
-            file_base_pattern = f"{self.obs_name}.{valid_dt:%Y%m%d}.precip.nc"
+            #file_base_pattern = f"{self.obs_name}.{valid_dt:%Y%m%d}.precip.nc" # /Projects/BIL area with time offset
+            file_base_pattern = f"prate.aorc.{valid_dt:%Y%m%d}.nc"
             file_path = os.path.join(self.native_data_dir, f"{valid_dt:%Y}", file_base_pattern)
 
             # Ensure file exists
@@ -1271,10 +1273,11 @@ class AorcDataProcessor(ReplayDataProcessor):
     # AORC presents average precip rate in mm/hr over the prior hour, so just used these values directly to represent hourly accumulated precipitation 
     # That is accumulated precip valid over the time steps of the model 
     def _calculate_aorc_native_accum_precip_amount(self):
-        print(f"Calculating accumulated {self.obs_name} precipitation from precrate")
+        print(f"Calculating accumulated {self.obs_name} precipitation from prate")
 
         # Use precip rate data directly, because it's average hourly precip rate (mm/hr) over the prior hour 
-        accum_precip_data_array = self.xr_dataset["precrate"].loc[f"{self.start_dt:%Y-%m-%d %H:%M:%S}":f"{self.end_dt:%Y-%m-%d %H:%M:%S}"]
+        # accum_precip_data_array = self.xr_dataset["precrate"].loc[f"{self.start_dt:%Y-%m-%d %H:%M:%S}":f"{self.end_dt:%Y-%m-%d %H:%M:%S}"] # /Projects/BIL area with time offset
+        accum_precip_data_array = self.xr_dataset["prate"].loc[f"{self.start_dt:%Y-%m-%d %H:%M:%S}":f"{self.end_dt:%Y-%m-%d %H:%M:%S}"]
 
         # Replace missing values with NaNs
         self.missing_value = float(self.xr_dataset.attrs["missing"]) 

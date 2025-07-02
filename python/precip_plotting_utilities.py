@@ -591,8 +591,8 @@ def determine_if_has_time_dim(data_array):
     return False
 
 # For each time in the data array, create a single-paneled contour plot of precipitation
-def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arange(0, 85, 5), short_name = "precip_data", 
-                           temporal_res = "native",  proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP):
+def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arange(0, 85, 5),
+                           short_name = "precip_data", proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP):
     match proj_name:
         case "LambertConformal":
             map_proj = ccrs.LambertConformal()
@@ -673,8 +673,9 @@ def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arang
         plt.savefig(fig_path)
 
 # Contour maps with the correct number of panels, with the "truth" dataset always in the top left
-def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels, short_name = "precip_data", 
-              single_colorbar = True, sparse_cbar_ticks = False, cmap = DEFAULT_PRECIP_CMAP):
+def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.arange(0, 85, 5),
+                          short_name = "precip_data", single_colorbar = True, sparse_cbar_ticks = False,
+                          cmap = DEFAULT_PRECIP_CMAP):
     # Configure basic info about the data
     truth_da = data_dict[truth_data_name]
     num_da = len(data_dict.items())
