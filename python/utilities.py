@@ -196,6 +196,24 @@ def convert_timedelta_to_minutes(tdelta):
 #def unix2datetime(unix_time):
 #    return dt.datetime.utcfromtimestamp(unix_time)
 
+# INTERPOLATION 
+#################################################################################
+# Map intuitive strings representing interpolation type to the flag representing that
+# type used by the cdo package.
+def set_cdo_interpolation_type(args_flag):
+    match args_flag:
+        case "bilinear": # Bilinear interpolation
+            return "remapbil"
+        case "conservative": # First-order conservative interpolation
+            return "remapcon"
+        case "conservative2": # Second-order conservative interpolation
+            return "remapcon2"
+        case "nearest": # Nearest-neighbor interpolation
+            return "remapnn"
+        case _:
+            print(f"Unrecognized interpolation type {args_flag}; will perform bilinear interpolation")
+            return "remapbil"
+
 # COMMAND MANAGEMENT
 #################################################################################
 # Communicate command output using subprocess

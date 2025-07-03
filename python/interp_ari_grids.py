@@ -29,7 +29,7 @@ def main():
     template_fpath = os.path.join(nc_dir, "TemplateGrids", "ReplayGrid.nc")
 
     # Set interpolation type to be used by cdo
-    cdo_interp_type = set_cdo_interpolation_type(args.interp_type) 
+    cdo_interp_type = utils.set_cdo_interpolation_type(args.interp_type) 
 
     # Configure input file path
     input_fpath = determine_ari_input_fpath(args.ari, args.duration) 
@@ -63,22 +63,6 @@ def main():
         print("Error: cdo interpolation command did not work")
         sys.exit(1)
         
-def set_cdo_interpolation_type(args_flag):
-    match args_flag:
-        case "bilinear": # Bilinear interpolation
-            return "remapbil"
-        case "conservative": # First-order conservative interpolation
-            return "remapcon"
-        case "conservative2": # Second-order conservative interpolation
-            return "remapcon2"
-        case "nearest": # Nearest-neighbor interpolation
-            return "remapnn"
-        case "nearest_neighbor": # Nearest-neighbor interpolation
-            return "remapnn"
-        case _:
-            print(f"Unrecognized interpolation type {args_flag}; will perform bilinear interpolation")
-            return "remapbil"
-
 def determine_ari_input_fpath(ari, duration):
     input_dir = "/Projects/WPC_ExtremeQPF/newARIs/"
     input_file = f"allusa_ari_{ari}yr_{duration}hr_xarray_st4grid.nc"

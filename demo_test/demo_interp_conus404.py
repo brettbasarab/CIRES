@@ -31,7 +31,7 @@ def main():
     template_fpath = os.path.join(nc_dir, "TemplateGrids", "ReplayGrid.nc")
 
     # Set interpolation type to be used by cdo
-    cdo_interp_type = set_cdo_interpolation_type(args.interp_type) 
+    cdo_interp_type = utils.set_cdo_interpolation_type(args.interp_type) 
 
     if not(args.read_azure):
         conus404_native_fpath = os.path.join(nc_testing_dir, "conus404_native.nc")
@@ -106,20 +106,6 @@ def main():
         conus404_replay_grid = xr.open_dataset(output_fpath).accum_precip 
         pputils.plot_cmap_single_panel(conus404_native, f"CONUS404.native.{args.interp_type}", "CONUS") 
         pputils.plot_cmap_single_panel(conus404_replay_grid, f"CONUS404.replay_grid.{args.interp_type}", "CONUS")
-
-def set_cdo_interpolation_type(args_flag):
-    match args_flag:
-        case "bilinear": # Bilinear interpolation
-            return "remapbil"
-        case "conservative": # First-order conservative interpolation
-            return "remapcon"
-        case "conservative2": # Second-order conservative interpolation
-            return "remapcon2"
-        case "nearest_neighbor": # Nearest-neighbor interpolation
-            return "remapnn"
-        case _:
-            print(f"Unrecognized interpolation type {args_flag}; will perform bilinear interpolation")
-            return "remapbil"
 
 def read_conus404_dataset_from_azure():
     print(f"Reading CONUS404 data from Azure into xarray Dataset")

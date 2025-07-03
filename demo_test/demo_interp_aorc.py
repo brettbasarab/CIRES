@@ -18,11 +18,6 @@ nc_dir = "/data/bbasarab/netcdf"
 nc_testing_dir = os.path.join(nc_dir, "testing")
 template_fpath = os.path.join(nc_dir, "TemplateGrids", "ReplayGrid.nc")
 
-@dataclasses.dataclass
-class CDF:
-    quantiles: float
-    values: float
-
 def main():
     utils.suppress_warnings()
     parser = argparse.ArgumentParser(description = "Interpolate AORC data using cdo command line utility; plot native and interpolated data")
@@ -153,18 +148,13 @@ def main():
             # Nearest neighbor
             pputils.plot_cmap_single_panel(accum_precip24_nbr, f"AORC.ReplayGrid.nearest", "CONUS", plot_levels = np.arange(0, 85, 5))
 
+        ##### Plot CDFs
         if args.cdfs:
-            # Create CDFs
-            print("Creating CDFs")
-            cdf_native = create_cdf(accum_precip24)
-            cdf_bil = create_cdf(accum_precip24_bil)
-            cdf_con = create_cdf(accum_precip24_con)
-            cdf_nbr = create_cdf(accum_precip24_nbr)
-
-            # Plot CDFs
             print("Plotting CDFs")
-            cdf_dict = {"Native": cdf_native, "Bilinear": cdf_bil, "Conservative": cdf_con, "Nearest": cdf_nbr}
-            plot_cdf(cdf_dict, current_dt)
+            pputils.plot_precip_cdf(data_dict,
+                                    f"AORC_interp_methods: {args.temporal_res:02d}-hour precip",
+                                    f"AORC_interp_methods.{args.temporal_res:02d}_hour_precipitation",
+                                    valid_dtime = current_dt, xlims = [0, 30], ylims = [0.7, 1.0], skip_nearest = True)
 
     ##### Calculate stats
     for data_name, da in data_dict.items():
@@ -189,26 +179,12 @@ def calculate_24hr_accum_precip(hourly_aorc_data):
 
     return precip24
 
-def set_cdo_interpolation_type(args_flag):
-    match args_flag:
-        case "bilinear": # Bilinear interpolation
-            return "remapbil"
-        case "conservative": # First-order conservative interpolation
-            return "remapcon"
-        case "conservative2": # Second-order conservative interpolation
-            return "remapcon2"
-        case "nearest": # Nearest-neighbor interpolation
-            return "remapnn"
-        case _:
-            print(f"Unrecognized interpolation type {args_flag}; will perform bilinear interpolation")
-            return "remapbil"
-
 def run_cdo_interpolation(interp_type, dtime, input_fpath, temporal_res = 24, do_interp = True):
     output_fpath = os.path.join(nc_testing_dir, f"AORC.ReplayGrid.{temporal_res:02d}_hour_precipitation.{interp_type}.{dtime:%Y%m%d}.nc")
     if not(do_interp): # Option to return output file path only without running interpolation
         return output_fpath
 
-    cdo_interp_flag = set_cdo_interpolation_type(interp_type)
+    cdo_interp_flag = utils.set_cdo_interpolation_type(interp_type)
 
     cdo_cmd = f"cdo -P 8 {cdo_interp_flag},{template_fpath} {input_fpath} {output_fpath}"
     print(f"Running: {cdo_cmd}")
@@ -234,31 +210,6 @@ def convert_from_dask_array(dask_array):
     da.name = "accum_precip"
 
     return da
-
-def create_cdf(data_array):
-    quantiles = np.concatenate(( np.arange(0.0, 1.0, 0.01), np.arange(0.991, 1.0, 0.001) ))
-    values = np.array([data_array.quantile(i).item() for i in quantiles])
-
-    return CDF(quantiles = quantiles, values = values)
-
-def plot_cdf(cdf_dict, dtime, temporal_res = 24, skip_nearest = True): 
-    plt.figure(figsize = (10, 10))
-    plt.grid(True, linewidth = 0.5)
-    plt.xlabel("Precip amount (mm)", size = 15)
-    plt.ylabel("Probability", size = 15)
-    plt.gca().set_xticks(np.arange(0, 85, 5))
-    plt.gca().set_yticks(np.arange(0, 1.1, 0.1))
-    plt.xlim(0, 30)
-    plt.ylim(0.7, 1.0)
-    plt.title(f"CDFs of native and upscaled AORC grids: {temporal_res:02d}-hour precip, valid {dtime:%Y%m%d}", size = 15)
-    for cdf_name, cdf in cdf_dict.items():
-        if (skip_nearest and cdf_name == "Nearest"):
-            continue 
-        plt.plot(cdf_dict[cdf_name].values, cdf_dict[cdf_name].quantiles, linewidth = 2, label = cdf_name)
-    plt.legend(loc = "best", prop = {"size": 15})
-    fig_fpath = os.path.join(utils.plot_output_dir, f"CDF.AORC.{temporal_res:02d}_hour_precipitation.{dtime:%Y%m%d}.png")
-    print(f"Saving {fig_fpath}") 
-    plt.savefig(fig_fpath)
 
 if __name__ == "__main__":
     data_dict = main() 

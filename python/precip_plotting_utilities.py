@@ -409,36 +409,30 @@ def set_cbar_labels_rotation_and_fontsize(plot_levels, region, num_da, for_singl
 # and for each accumulation period for precipitation.
 def variable_plot_limits(var_name, temporal_res = "native"):
     match var_name:
-        case utils.accum_precip_var_name:
-            match temporal_res:
-                case "native":
-                    return np.arange(0, 32, 2) # mm 
-                case 1:
-                    return np.arange(0, 42, 2) 
-                case 3:
-                    return np.arange(0, 75, 5)
-                case 6:
-                    return np.arange(0, 90, 10)
-                case 12:
-                    return np.arange(0, 130, 10) 
-                case 24:
-                    return np.arange(0, 210, 10)
-                case 48:
-                    return np.arange(0, 310, 10)
-                case 72:
-                    return np.arange(0, 380, 20)
-                case 120:
-                    return np.arange(0, 440, 20)
-                case 168:
-                    return np.arange(0, 750, 50)
-                case _:
-                    print(f"No accumulated precip data set with resolution {temporal_res}") 
-                    sys.exit(1)
         case "tmp2m":
-            return np.arange(220, 325, 5) # Kelvin
-        case _:
-            print(f"Variable plot limits not defined for var {var_name}")
-            sys.exit(1)
+            return np.arange(-15, 45, 5) # Celsius 
+        case _: # For any other variable, assume it's precipitation 
+            match temporal_res:
+                case 1:
+                    return np.arange(0, 32, 2) # mm 
+                case 3:
+                    return np.arange(0, 55, 5)
+                case 6:
+                    return np.arange(0, 65, 5)
+                case 12:
+                    return np.arange(0, 85, 5) 
+                case 24:
+                    return np.arange(0, 85, 5)
+                case 48:
+                    return np.arange(0, 125, 5)
+                case 72:
+                    return np.arange(0, 210, 10)
+                case 120:
+                    return np.arange(0, 310, 10)
+                case 168:
+                    return np.arange(0, 420, 20)
+                case _: # For example, "native" resolution
+                    return np.arange(0, 32, 2)
 
 # Plot limits to use for contour maps of percentiles for different variables
 # and for each accumulation period for precipitation.
@@ -467,6 +461,67 @@ def variable_pctl_plot_limits(var_name, temporal_res = "native"):
         case _:
             print(f"Variable percentile plot limits not defined for var {var_name}")
             sys.exit(1)
+
+@dataclasses.dataclass
+class CDF:
+    quantiles: float
+    values: float
+
+def create_cdf(data_array):
+    quantiles = np.concatenate(( np.arange(0.0, 1.0, 0.01), np.arange(0.991, 1.0, 0.001) ))
+    values = np.array([data_array.quantile(i).item() for i in quantiles])
+
+    return CDF(quantiles = quantiles, values = values)
+
+def how_to_plot_precip_cdf():
+    print("plot_precip_cdf(data_dict, plot_name, fig_name,\n"
+          "                valid_dtime = None,\n"
+          "                xticks = np.arange(0, 85, 5),\n"
+          "                yticks = np.arange(0, 1.1, 0.1),\n"
+          "                xlims = [0, 80],\n"
+          "                ylims = [0, 1.0],\n"
+          "                xticks_rotation = 0,\n"
+          "                skip_nearest = False)")
+
+def plot_precip_cdf(data_dict, plot_name, fig_name,
+                    valid_dtime = None,
+                    xticks = np.arange(0, 85, 5),
+                    yticks = np.arange(0, 1.1, 0.1),
+                    xlims = [0, 80],
+                    ylims = [0, 1.0],
+                    xticks_rotation = 0,
+                    skip_nearest = False):
+    cdf_dict = {} 
+    for data_name, da in data_dict.items():
+        cdf_dict[data_name] = create_cdf(da) 
+
+    plt.figure(figsize = (10, 10))
+    plt.grid(True, linewidth = 0.5)
+    plt.xlabel("Precip amount (mm)", size = 15)
+    plt.ylabel("Probability", size = 15)
+    plt.xticks(xticks, xticks, fontsize = 15, rotation = xticks_rotation)
+    plt.yticks(yticks, [f"{ytick:0.1f}" for ytick in yticks], fontsize = 15)
+    plt.xlim(xlims)
+    plt.ylim(ylims)
+    for cdf_name, cdf in cdf_dict.items():
+        # For CDFs of different interpolation methods, can be useful to skip plotting of nearest-neighbor output
+        # (often qualitatively similar to bilinear interoplation output).
+        if (skip_nearest and cdf_name == "Nearest"):
+            continue 
+        plt.plot(cdf_dict[cdf_name].values, cdf_dict[cdf_name].quantiles, linewidth = 2, label = cdf_name)
+    plt.legend(loc = "best", prop = {"size": 15})
+
+    title_string = f"CDFs {plot_name}"
+    fig_name = f"CDF.{fig_name}"
+    if valid_dtime is not None:
+        title_string += f", valid {valid_dtime:%Y%m%d}"
+        fig_name += f".{valid_dtime:%Y%m%d}"
+    plt.title(title_string, size = 15)
+    fig_name += ".png"
+    fig_fpath = os.path.join(utils.plot_output_dir, fig_name)
+    plt.tight_layout() 
+    print(f"Saving {fig_fpath}") 
+    plt.savefig(fig_fpath)
 
 # Label only every-other tick of a colorbar and use "" (blank) for the other ticks
 # This logic is necessary since the lists of colorbar ticks and tick labels must have the same length
@@ -590,6 +645,10 @@ def determine_if_has_time_dim(data_array):
         return True
     return False
 
+def how_to_plot_cmap_single_panel():
+    print('plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arange(0, 85, 5),\n'
+          '                       short_name = "precip_data", proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP)')
+
 # For each time in the data array, create a single-paneled contour plot of precipitation
 def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arange(0, 85, 5),
                            short_name = "precip_data", proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP):
@@ -652,7 +711,6 @@ def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arang
         plt.ylabel("Longitude", fontsize = 15)
         plt.xticks(fontsize = 15)
         plt.yticks(fontsize = 15)
-        plt.tight_layout()
         
         if (type(dtime) is pd.Timestamp):
             title_string = f"{region} {formatted_short_name} valid at {dt_str}"
@@ -671,6 +729,11 @@ def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arang
         fig_path = os.path.join(utils.plot_output_dir, fig_name)
         print(f"Saving {fig_path}")
         plt.savefig(fig_path)
+
+def how_to_plot_cmap_multi_panel():
+    print('plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.arange(0, 85, 5),\n'
+          '                      short_name = "precip_data", single_colorbar = True, sparse_cbar_ticks = False,\n'
+          '                      cmap = DEFAULT_PRECIP_CMAP)')
 
 # Contour maps with the correct number of panels, with the "truth" dataset always in the top left
 def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.arange(0, 85, 5),
@@ -775,6 +838,11 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.a
         fig_path = os.path.join(utils.plot_output_dir, fig_name)
         print(f"Saving {fig_path}")
         plt.savefig(fig_path)
+  
+def how_to_plot_blank_map_of_each_region():
+    print("plot_blank_map_of_each_region()\n")
+    print("Call it straight up, bro! Ain't no arguments required!")
+    print("It will plot ALL the regions defined in regions_info_dict.")
 
 # Plot a blank map for each region defined in regions_info_dict 
 # This can be useful to assess whether the bounds for each region need to be adjusted, for example. 
