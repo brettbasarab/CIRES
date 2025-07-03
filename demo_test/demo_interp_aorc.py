@@ -136,17 +136,35 @@ def main():
         
         ##### Plot 24-hour AORC data
         if args.plot:
+            plot_levels = pputils.variable_plot_limits("precip", args.temporal_res)
+
             # Native grid 
-            pputils.plot_cmap_single_panel(accum_precip24, "AORC.NativeGrid", "CONUS", plot_levels = np.arange(0, 85, 5)) 
+            pputils.plot_cmap_single_panel(accum_precip24,
+                                           "AORC Native Grid",
+                                           "AORC.NativeGrid",
+                                           "CONUS",
+                                           plot_levels = plot_levels) 
             
             # Bilinear
-            pputils.plot_cmap_single_panel(accum_precip24_bil, f"AORC.ReplayGrid.bilinear", "CONUS", plot_levels = np.arange(0, 85, 5))
+            pputils.plot_cmap_single_panel(accum_precip24_bil,
+                                           "AORC Replay Grid Bilinear",
+                                           "AORC.ReplayGrid.bilinear",
+                                           "CONUS",
+                                           plot_levels =  plot_levels)
 
             # Conservative
-            pputils.plot_cmap_single_panel(accum_precip24_con, f"AORC.ReplayGrid.conservative", "CONUS", plot_levels = np.arange(0, 85, 5))
+            pputils.plot_cmap_single_panel(accum_precip24_con,
+                                           "AORC Replay Grid Conservative",
+                                           "AORC.ReplayGrid.conservative",
+                                           "CONUS",
+                                           plot_levels = plot_levels) 
 
             # Nearest neighbor
-            pputils.plot_cmap_single_panel(accum_precip24_nbr, f"AORC.ReplayGrid.nearest", "CONUS", plot_levels = np.arange(0, 85, 5))
+            pputils.plot_cmap_single_panel(accum_precip24_nbr,
+                                           "AORC Replay Grid Nearest",
+                                           "AORC.ReplayGrid.nearest",
+                                           "CONUS",
+                                           plot_levels = plot_levels) 
 
         ##### Plot CDFs
         if args.cdfs:
@@ -154,15 +172,23 @@ def main():
             pputils.plot_precip_cdf(data_dict,
                                     f"AORC_interp_methods: {args.temporal_res:02d}-hour precip",
                                     f"AORC_interp_methods.{args.temporal_res:02d}_hour_precipitation",
-                                    valid_dtime = current_dt, xlims = [0, 30], ylims = [0.7, 1.0], skip_nearest = True)
+                                    valid_dtime = current_dt,
+                                    xticks = np.arange(0, 55, 5),
+                                    yticks = np.arange(0.75, 1.05, 0.05),
+                                    xlims = [0, 50],
+                                    ylims = [0.75, 1.0],
+                                    skip_nearest = True)
 
     ##### Calculate stats
     for data_name, da in data_dict.items():
         print(f"***** {data_name}:")
         print(f"Min: {da.min().item()}")
-        print(f"Max: {da.max().item()}")
         print(f"Mean: {da.mean().item()}")
         print(f"Median: {da.median().item()}")
+        print(f"Max: {da.max().item()}")
+        print(f"95.0th pctl: {da.quantile(0.95).item()}")
+        print(f"99.0th pctl: {da.quantile(0.99).item()}")
+        print(f"99.9th pctl: {da.quantile(0.999).item()}")
         
     return data_dict
 

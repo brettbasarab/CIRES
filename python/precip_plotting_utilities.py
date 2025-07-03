@@ -500,7 +500,7 @@ def plot_precip_cdf(data_dict, plot_name, fig_name,
     plt.xlabel("Precip amount (mm)", size = 15)
     plt.ylabel("Probability", size = 15)
     plt.xticks(xticks, xticks, fontsize = 15, rotation = xticks_rotation)
-    plt.yticks(yticks, [f"{ytick:0.1f}" for ytick in yticks], fontsize = 15)
+    plt.yticks(yticks, [f"{ytick:0.2f}" for ytick in yticks], fontsize = 15)
     plt.xlim(xlims)
     plt.ylim(ylims)
     for cdf_name, cdf in cdf_dict.items():
@@ -646,11 +646,11 @@ def determine_if_has_time_dim(data_array):
     return False
 
 def how_to_plot_cmap_single_panel():
-    print('plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arange(0, 85, 5),\n'
+    print('plot_cmap_single_panel(data_array, plot_name, fig_name, region, plot_levels = np.arange(0, 85, 5),\n'
           '                       short_name = "precip_data", proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP)')
 
 # For each time in the data array, create a single-paneled contour plot of precipitation
-def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arange(0, 85, 5),
+def plot_cmap_single_panel(data_array, plot_name, fig_name, region, plot_levels = np.arange(0, 85, 5),
                            short_name = "precip_data", proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP):
     match proj_name:
         case "LambertConformal":
@@ -711,21 +711,20 @@ def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arang
         plt.ylabel("Longitude", fontsize = 15)
         plt.xticks(fontsize = 15)
         plt.yticks(fontsize = 15)
-        
+       
+        title_string = f"{plot_name} {formatted_short_name}, {region}" 
         if (type(dtime) is pd.Timestamp):
-            title_string = f"{region} {formatted_short_name} valid at {dt_str}"
+            title_string += f": valid at {dt_str}"
         elif (type(dtime) is str) and (has_time_dim):
-            title_string = f"{region} {formatted_short_name}: {dt_str}"
-        else:
-            title_string = f"{region} {formatted_short_name}"
+            title_string += f": {dt_str}"
         plt.title(title_string, fontsize = 15, fontweight = "bold")
         plt.tight_layout()
 
         # Save figure
         if has_time_dim:
-            fig_name = f"cmap.{data_name}.{formatted_short_name}.{dt_str}.{region}.png"
+            fig_name = f"cmap.{fig_name}.{formatted_short_name}.{dt_str}.{region}.png"
         else:
-            fig_name = f"cmap.{data_name}.{formatted_short_name}.{region}.png"
+            fig_name = f"cmap.{fig_name}.{formatted_short_name}.{region}.png"
         fig_path = os.path.join(utils.plot_output_dir, fig_name)
         print(f"Saving {fig_path}")
         plt.savefig(fig_path)
