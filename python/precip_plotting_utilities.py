@@ -265,8 +265,8 @@ time_series_color_dict = {"AORC":                       "blue",
                           "CONUS404":                 "purple",
                           "ERA5":                        "red",
                           "IMERG":                     "green",
-                          "NestedReplay":            "magenta",
-                          "NestedReplayCorrector": "lightpink",
+                          "NestedReplay":               "teal",
+                          "NestedReplayPredictor": "cadetblue",
                           "Replay":                   "orange",
                          }
 
@@ -722,10 +722,10 @@ def plot_cmap_single_panel(data_array, plot_name, fig_name, region, plot_levels 
 
         # Save figure
         if has_time_dim:
-            fig_name = f"cmap.{fig_name}.{formatted_short_name}.{dt_str}.{region}.png"
+            fig_full_name = f"cmap.{fig_name}.{formatted_short_name}.{dt_str}.{region}.png"
         else:
-            fig_name = f"cmap.{fig_name}.{formatted_short_name}.{region}.png"
-        fig_path = os.path.join(utils.plot_output_dir, fig_name)
+            fig_full_name = f"cmap.{fig_name}.{formatted_short_name}.{region}.png"
+        fig_path = os.path.join(utils.plot_output_dir, fig_full_name)
         print(f"Saving {fig_path}")
         plt.savefig(fig_path)
 

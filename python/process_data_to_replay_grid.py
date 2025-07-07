@@ -98,7 +98,8 @@ def main():
             print(f"*** Plotting {processor.model_name} data")
             model_precip = processor.get_model_precip_data(time_period_hours = args.temporal_res, load = True)
             pputils.plot_cmap_single_panel(model_precip,
-                                           processor.model_name,
+                                           f"{processor.model_name}.NativeGrid",
+                                           f"{processor.model_name}.NativeGrid",
                                            processor.region,
                                            plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
         else:
@@ -106,7 +107,8 @@ def main():
             print(f"*** Plotting {args.data_name} {args.temporal_res}-hourly data at native {args.data_name} spatial resolution")
             obs_precip = processor.get_precip_data(temporal_res = args.temporal_res, spatial_res = "native", load = True)
             pputils.plot_cmap_single_panel(obs_precip,
-                                           processor.obs_name,
+                                           f"{processor.obs_name}.NativeGrid",
+                                           f"{processor.obs_name}.NativeGrid",
                                            processor.region,
                                            plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
        
@@ -116,6 +118,7 @@ def main():
                 obs_precip_model_grid = processor.get_precip_data(temporal_res = args.temporal_res, spatial_res = "model", load = True)
                 pputils.plot_cmap_single_panel(obs_precip_model_grid,
                                                f"{processor.obs_name}.{processor.model_name}Grid",
+                                               f"{processor.obs_name}.{processor.model_name}Grid",
                                                processor.region,
                                                plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
 
@@ -123,7 +126,8 @@ def main():
                 print(f"*** Plotting {processor.model_name} data")
                 model_precip = processor.get_model_precip_data(time_period_hours = args.temporal_res, load = True)
                 pputils.plot_cmap_single_panel(model_precip,
-                                               processor.model_name,
+                                               f"{processor.model_name}.NativeGrid",
+                                               f"{processor.model_name}.NativeGrid",
                                                processor.region,
                                                plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
 

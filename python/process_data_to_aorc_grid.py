@@ -79,37 +79,34 @@ def main():
         # Plot precip data at native spatial resolution
         print(f"*** Plotting {args.data_name} {args.output_temporal_res}-hourly data at native {args.data_name} spatial resolution")
         precip_native_grid = processor.get_precip_data(temporal_res = args.output_temporal_res, spatial_res = "native", load = True)
-
         output_grid_string = precip_data_processors.set_grid_name_for_file_names("native")
-        plot_name = f"{args.data_name}.{output_grid_string}"
-        if (args.data_name == "NestedReplay"):
-            plot_name += f".{processor.replay_segment}"
-        
-        use_contourf = False
-        if (args.data_name == "CONUS404"):
-            use_contourf = True
-
+        plot_name = set_plot_output_name(output_grid_string, args.data_name, replay_segment = args.replay_segment)
         pputils.plot_cmap_single_panel(precip_native_grid,
+                                       plot_name,
                                        plot_name, 
                                        processor.region,
-                                       plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
+                                       plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.output_temporal_res))
    
         if dest_grid_flag:
             # Plot precip data at obs grid resolution
             print(f"*** Plotting {args.data_name} {args.output_temporal_res}-hourly data at {processor.dest_grid_name} spatial resolution")
             precip_dest_grid = processor.get_precip_data(temporal_res = args.output_temporal_res, spatial_res = "dest_grid", load = True)
-
             output_grid_string = precip_data_processors.set_grid_name_for_file_names(processor.dest_grid_name) 
-            plot_name = f"{args.data_name}.{output_grid_string}"
-            if (args.data_name == "NestedReplay"):
-                plot_name += f".{processor.replay_segment}"
-
+            plot_name = set_plot_output_name(output_grid_string, args.data_name, replay_segment = args.replay_segment)
             pputils.plot_cmap_single_panel(precip_dest_grid,
+                                           plot_name,
                                            plot_name, 
                                            processor.region,
-                                           plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.temporal_res))
+                                           plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.output_temporal_res))
 
     return processor
+
+def set_plot_output_name(output_grid_string, data_name, replay_segment = "corrector"):
+    plot_name = f"{data_name}.{output_grid_string}"
+    if (data_name == "NestedReplay"):
+        plot_name += f".{replay_segment}"
+   
+    return plot_name 
 
 if __name__ == "__main__":
     processor = main() 
