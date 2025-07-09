@@ -16,6 +16,7 @@ DEFAULT_PRECIP_CMAP = "terrain_r"
 class RegionPlottingConfiguration:
     region_extent: [int, int, int, int]
     figsize_sp: (int, int) # Figure size for single-panel plots
+    figsize_2p: (int, int) # Figure size for 2-paneled plots
     figsize_mp: (int, int) # Figure size for multi-panel plots
     figsize_mp_5plus: (int, int) # Figure size for multi-panel plots with five or more panels
     cm_mean_precip_range: np.ndarray # Contour map precip color map range
@@ -38,6 +39,7 @@ regions_info_dict = \
     "CONUS": RegionPlottingConfiguration(
                 region_extent = [-125, -66, 24, 51],
                 figsize_sp = (15, 10), 
+                figsize_2p = (15, 6), 
                 figsize_mp = (15, 10),
                 figsize_mp_5plus = (15, 7.5),
                 cm_mean_precip_range = np.arange(0, 10.5, 0.5),
@@ -49,6 +51,7 @@ regions_info_dict = \
     "US-East": RegionPlottingConfiguration(
                 region_extent = [-85, -66, 24, 51],
                 figsize_sp = (10, 15), 
+                figsize_2p = (9, 8), 
                 figsize_mp = (10, 15), 
                 figsize_mp_5plus = (10, 12.5),
                 cm_mean_precip_range = np.arange(0, 6.5, 0.5), 
@@ -59,6 +62,7 @@ regions_info_dict = \
     "US-Central": RegionPlottingConfiguration(
                 region_extent = [-103, -85, 24, 51],
                 figsize_sp = (11, 18), 
+                figsize_2p = (9, 8), 
                 figsize_mp = (11, 18), 
                 figsize_mp_5plus = (11, 14.5),
                 cm_mean_precip_range = np.arange(0, 6.5, 0.5), 
@@ -70,6 +74,7 @@ regions_info_dict = \
                 #region_extent = [-117, -103, 28, 51], # Old extent for mountain states not explicitly included
                 region_extent = [-120, -103, 28, 51],
                 figsize_sp = (10, 14),
+                figsize_2p = (9.5, 8), 
                 figsize_mp = (11, 14), # (10, 14) 
                 figsize_mp_5plus = (11, 14), # (10, 14)
                 cm_mean_precip_range = np.arange(0, 6.5, 0.5), 
@@ -80,6 +85,7 @@ regions_info_dict = \
     "US-WestCoast": RegionPlottingConfiguration( # Same domain as US-West, but verification will be confined to WA, OR, and CA
                 region_extent = [-129, -113, 28, 51],
                 figsize_sp = (10, 15), 
+                figsize_2p = (9, 8), 
                 figsize_mp = (10, 15), 
                 figsize_mp_5plus = (10, 12.5),
                 cm_mean_precip_range = np.arange(0, 15, 1),
@@ -91,6 +97,7 @@ regions_info_dict = \
     "US-Colorado": RegionPlottingConfiguration(
                 region_extent = [-110, -100, 35, 43],
                 figsize_sp = (13, 12), 
+                figsize_2p = (10, 7), 
                 figsize_mp = (13, 12), 
                 figsize_mp_5plus = (13, 12),
                 cm_mean_precip_range = np.arange(0, 6.5, 0.5), 
@@ -101,6 +108,7 @@ regions_info_dict = \
     "US-GulfCoast": RegionPlottingConfiguration(
                 region_extent = [-95, -80, 24, 32], 
                 figsize_sp = (15, 11), 
+                figsize_2p = (10, 7), 
                 figsize_mp = (15, 11), 
                 figsize_mp_5plus = (15, 8),
                 cm_mean_precip_range = np.arange(0, 6.5, 0.5), 
@@ -111,6 +119,7 @@ regions_info_dict = \
     "US-NorthEast": RegionPlottingConfiguration(
                 region_extent = [-92, -67, 36, 49], 
                 figsize_sp = (14, 10.5), 
+                figsize_2p = (10, 7), 
                 figsize_mp = (14, 10.5), 
                 figsize_mp_5plus = (15, 8.5),
                 cm_mean_precip_range = np.arange(0, 6.5, 0.5), 
@@ -121,6 +130,7 @@ regions_info_dict = \
     "US-SouthEast": RegionPlottingConfiguration(
                 region_extent = [-95, -75, 24, 37], 
                 figsize_sp = (15, 11), 
+                figsize_2p = (10, 7), 
                 figsize_mp = (15, 11), 
                 figsize_mp_5plus = (15, 9.5),
                 cm_mean_precip_range = np.arange(0, 6.5, 0.5), 
@@ -134,6 +144,7 @@ regions_info_dict = \
     "Africa": RegionPlottingConfiguration( 
                 region_extent = [-20, 55, -38, 40],
                 figsize_sp = (10, 12), 
+                figsize_2p = (10, 8), 
                 figsize_mp = (13, 17.5), 
                 figsize_mp_5plus = (13, 15.5),
                 cm_mean_precip_range = np.arange(0, 17, 1),
@@ -144,6 +155,7 @@ regions_info_dict = \
     "Australia": RegionPlottingConfiguration(
                 region_extent = [112, 156, -45, -9],
                 figsize_sp = (13, 11), 
+                figsize_2p = (10, 8), 
                 figsize_mp = (13, 11), 
                 figsize_mp_5plus = (13, 10),
                 cm_mean_precip_range = np.arange(0, 10.5, 0.5),
@@ -154,6 +166,7 @@ regions_info_dict = \
     "EastPacAR": RegionPlottingConfiguration( # Extends into Pacific to capture ARs
                 region_extent = [-150, -113, 28, 51],
                 figsize_sp = (15, 10), 
+                figsize_2p = (10, 8), 
                 figsize_mp = (15, 10), 
                 figsize_mp_5plus = (15, 9),
                 cm_mean_precip_range = np.arange(0, 10.5, 0.5), 
@@ -164,6 +177,7 @@ regions_info_dict = \
     "Europe": RegionPlottingConfiguration(
                 region_extent = [-12, 50, 35, 72],
                 figsize_sp = (15, 12), 
+                figsize_2p = (10, 8), 
                 figsize_mp = (15, 12), 
                 figsize_mp_5plus = (15, 10),
                 cm_mean_precip_range = np.arange(0, 6.5, 0.5),
@@ -174,6 +188,7 @@ regions_info_dict = \
     "Global": RegionPlottingConfiguration(
                 region_extent = [-180, 180, -90, 90],
                 figsize_sp = (15, 10), 
+                figsize_2p = (10, 8), 
                 figsize_mp = (15, 10.5),
                 figsize_mp_5plus = (15, 9),
                 cm_mean_precip_range = np.arange(0, 21, 1),
@@ -184,6 +199,7 @@ regions_info_dict = \
     "MaritimeContinent": RegionPlottingConfiguration(
                 region_extent = [90, 160, -18, 18],
                 figsize_sp = (15, 11), 
+                figsize_2p = (11, 6), 
                 figsize_mp = (15, 11),
                 figsize_mp_5plus = (15, 9),
                 cm_mean_precip_range = np.arange(0, 21, 1),
@@ -194,6 +210,7 @@ regions_info_dict = \
     "MJO": RegionPlottingConfiguration(
                 region_extent = [70, 170, -18, 18],
                 figsize_sp = (16, 10), 
+                figsize_2p = (11, 6), 
                 figsize_mp = (16, 11), 
                 figsize_mp_5plus = (16, 9),
                 cm_mean_precip_range = np.arange(0, 21, 1),
@@ -204,6 +221,7 @@ regions_info_dict = \
     "SouthAmerica": RegionPlottingConfiguration(
                 region_extent = [-83, -33, -57, 13],
                 figsize_sp = (9, 14), 
+                figsize_2p = (11, 8), 
                 figsize_mp = (9, 14), 
                 figsize_mp_5plus = (9, 12),
                 cm_mean_precip_range = np.arange(0, 21, 1),
@@ -214,6 +232,7 @@ regions_info_dict = \
     "WestPacJapan": RegionPlottingConfiguration(
                 region_extent = [118, 178, 20, 50],
                 figsize_sp = (14, 10), 
+                figsize_2p = (11, 7), 
                 figsize_mp = (14, 10), 
                 figsize_mp_5plus = (14, 8),
                 cm_mean_precip_range = np.arange(0, 15.5, 0.5),
@@ -603,11 +622,44 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
                             plt.subplot2grid((8, 6), (4, 1), colspan = 2, rowspan = 4, projection = proj),
                             plt.subplot2grid((8, 6), (4, 3), colspan = 2, rowspan = 4, projection = proj),
                             ]
+        case 6:
+            if single_colorbar:
+                axes_list = [
+                            plt.subplot2grid((9, 6), (0, 0), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((9, 6), (0, 2), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((9, 6), (0, 4), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((9, 6), (4, 0), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((9, 6), (4, 2), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((9, 6), (4, 4), colspan = 2, rowspan = 4, projection = proj),
+                            ]
+                cbar_ax = plt.subplot2grid((9, 6), (8, 1), colspan = 4, rowspan = 1)
+            else:
+                axes_list = [
+                            plt.subplot2grid((8, 6), (0, 0), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((8, 6), (0, 2), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((8, 6), (0, 4), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((8, 6), (4, 0), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((8, 6), (4, 2), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((8, 6), (4, 4), colspan = 2, rowspan = 4, projection = proj),
+                            ]
         case _:
             print("Error: Can't handle {num_da}-paneled subplot")
             return
 
     return axes_list, cbar_ax
+
+def set_figsize_based_on_num_da(num_da, region, single_colorbar = True):
+    if (num_da == 1):
+        return regions_info_dict[region].figsize_sp
+    elif (num_da == 2):
+        if not(single_colorbar):
+            figsize = regions_info_dict[region].figsize_2p
+            return (figsize[0], figsize[1] -1) 
+        return regions_info_dict[region].figsize_2p
+    elif (num_da < 5):
+        return regions_info_dict[region].figsize_mp
+    else:
+        return regions_info_dict[region].figsize_mp_5plus
 
 def add_cartopy_features_to_map_proj(axis, region, data_proj, draw_labels = False):
         axis.coastlines()
@@ -741,12 +793,9 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.a
     # Configure basic info about the data
     truth_da = data_dict[truth_data_name]
     num_da = len(data_dict.items())
+    figsize = set_figsize_based_on_num_da(num_da, region, single_colorbar = single_colorbar)
     data_names_str = "".join(f"{key}." for key in data_dict.keys())
-    if (num_da >= 5):
-        figsize = regions_info_dict[region].figsize_mp_5plus
-    else:
-        figsize = regions_info_dict[region].figsize_mp
-    
+
     # single_colorbar refers to having a single color bar for multiple subplots, so not relevant for single-panel plot
     if (num_da == 1):
         single_colorbar = False

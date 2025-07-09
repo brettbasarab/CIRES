@@ -1656,12 +1656,8 @@ class PrecipVerificationProcessor(object):
 
         # Loop through these datetimes, making figures with subplots corresponding to each of the data arrays in data_dict
         for dtime in dtimes:
-            if (num_da >= 5):
-                figsize = pputils.regions_info_dict[self.region].figsize_mp_5plus
-            else:
-                figsize = pputils.regions_info_dict[self.region].figsize_mp
- 
-            fig = plt.figure(figsize = figsize)
+            figsize = pputils.set_figsize_based_on_num_da(num_da, self.region, single_colorbar = single_colorbar)
+            fig = plt.figure(figsize = figsize) 
             axes_list, cbar_ax = pputils.create_gridded_subplots(num_da, proj, single_colorbar = single_colorbar) 
 
             if (type(dtime) is pd.Timestamp):
