@@ -34,10 +34,15 @@ def main():
     args = parser.parse_args()
 
     current_dt = dt.datetime.strptime(args.dt_str, "%Y%m%d")
-
-    fpath_native = os.path.join(nc_testing_dir, f"prate.aorc.{current_dt:%Y%m%d}.nc")
+    fpath_native = os.path.join("/Projects/AORC_CONUS_4km", f"{current_dt:%Y}", f"prate.aorc.{current_dt:%Y%m%d}.nc")
     if not(os.path.exists(fpath_native)):
         print(f"Error: Input AORC file to interpolate {fpath_native} does not exist")
+        sys.exit(1)
+    
+    current_dt_p1 = current_dt + dt.timedelta(days = 1)
+    fpath_native_p1 = os.path.join("/Projects/AORC_CONUS_4km", f"{current_dt_p1:%Y}", f"prate.aorc.{current_dt_p1:%Y%m%d}.nc")
+    if not(os.path.exists(fpath_native_p1)):
+        print(f"Error: Input AORC file to interpolate {fpath_native_p1} does not exist")
         sys.exit(1)
 
     if (args.temporal_res == 1):
@@ -87,12 +92,7 @@ def main():
     elif (args.temporal_res == 24):
         # Calculate 24-hourly AORC data. Since data are period-ending, but each file
         # contains data from 00z to 23z, we need to get two separate files to get data
-        # ending at 01z to data ending at 00z (the next day).
-        current_dt_p1 = current_dt + dt.timedelta(days = 1)
-        fpath_native_p1 = os.path.join(nc_testing_dir, f"prate.aorc.{current_dt_p1:%Y%m%d}.nc")
-        if not(os.path.exists(fpath_native_p1)):
-            print(f"Error: Input AORC file to interpolate {fpath_native_p1} does not exist")
-            sys.exit(1)
+        # ending at 01z (on the current day) to data ending at 00z (on the next day).
         precip = xr.open_mfdataset([fpath_native, fpath_native_p1]).prate
         precip = precip.rename({utils.time_dim_str: utils.period_end_time_dim_str})
         precip = precip.loc[f"{current_dt:%Y-%m-%d 01:00:00}":f"{current_dt_p1:%Y-%m-%d 00:00:00}"]
