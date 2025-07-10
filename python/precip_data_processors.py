@@ -49,6 +49,20 @@ def add_attributes_to_data_array(data_array, short_name = None, long_name = None
     if (interval_hours is not None): 
         data_array.attrs["interval_hours"] = interval_hours 
 
+# Calculate 24-hour precipitation from hourly precipitation
+def calculate_24hr_accum_precip(hourly_data):
+    time_step = 24
+    roller = hourly_data.rolling({utils.period_end_time_dim_str: time_step})
+    precip24 = roller.sum()[(time_step - 1)::time_step,:,:]
+    precip24.name = utils.accum_precip_var_name
+    add_attributes_to_data_array(precip24,
+                                 short_name = f"24-hour precipitation",
+                                 long_name = f"Precipitation accumulated over the prior 24 hour(s)",
+                                 units = "mm",
+                                 interval_hours = 24)
+
+    return precip24
+
 def check_model_valid_dt_format(dt_str, resolution = 3, check_resolution = True):
     if (resolution < 24):
         dt_fmt = "%Y%m%d.%H"
