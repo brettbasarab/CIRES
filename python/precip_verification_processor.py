@@ -49,20 +49,22 @@ evaluate_by_ari_kw_str = "by_ari_grid"
 
 # For a given region, return a list of the names of the datasets currently used
 # in verification, as well as the dataset that will be considered truth (truth_data_name)
-def map_region_to_data_names(region, high_res = False):
+def map_region_to_data_names(region, high_res = False, include_hrrr = False):
     if ("US" in region): 
         truth_data_name =  "AORC"
         data_grid = "Replay"
         data_names = ["AORC", "CONUS404", "ERA5", "IMERG", "Replay"]
         if high_res:
             data_grid = "AORC"
-            data_names = ["AORC", "CONUS404", "NestedReplay"] 
+            data_names = ["AORC", "CONUS404", "NestedReplay"]
+        if include_hrrr:
+            data_names.append("HRRR")
     else: 
         truth_data_name = "IMERG"
         data_grid = "Replay"
         data_names = ["IMERG", "Replay", "ERA5"]
 
-    return data_names, truth_data_name, data_grid
+    return sorted(data_names), truth_data_name, data_grid
 
 class PrecipVerificationProcessor(object):
     def __init__(self, start_dt_str, end_dt_str,
@@ -1867,8 +1869,8 @@ class PrecipVerificationProcessor(object):
             ann_pos_step = 0.20
             ann_size = 12
         else:
-            ann_pos_step = 0.15
-            ann_size = 11
+            ann_pos_step = 0.17
+            ann_size = 10
         
         ann_pos_horz = 0.01
         ann_pos_vert = 0.86

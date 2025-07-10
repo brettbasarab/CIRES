@@ -283,6 +283,7 @@ def construct_seasonal_string_list():
 time_series_color_dict = {"AORC":                       "blue",
                           "CONUS404":                 "purple",
                           "ERA5":                        "red",
+                          "HRRR":                       "cyan",
                           "IMERG":                     "green",
                           "NestedReplay":               "teal",
                           "NestedReplayPredictor": "cadetblue",

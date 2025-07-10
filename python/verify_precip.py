@@ -36,6 +36,8 @@ def main():
                         help = "Time period types over which to perform analysis; default ['full_period', 'common_seasonal', 'common_monthly']")
     parser.add_argument("--high_res", dest = "high_res", action = "store_true", default = False,
                         help = "Set to verify CONUS high-resolution datasets (AORC, CONUS404, NestedReplay, etc.)")
+    parser.add_argument("--include_hrrr", dest = "include_hrrr", action = "store_true", default = False,
+                        help = "Set to include HRRR in verification")
     # Statistics flags: set which statistic(s) to calculated
     parser.add_argument("--cmaps", dest = "cmaps", action = "store_true", default = False,
                         help = "Set to plot contour maps (cmaps) of mean and percentiles of gridded data aggregated over various time periods")
@@ -65,7 +67,9 @@ def main():
     if (type(args.data_names_list) is list) and (len(args.data_names_list) >= 1):
         data_names, truth_data_name, data_grid = args.data_names_list, args.data_names_list[0]
     else:
-        data_names, truth_data_name, data_grid = precip_verification_processor.map_region_to_data_names(args.region, high_res = args.high_res) 
+        data_names, truth_data_name, data_grid = precip_verification_processor.map_region_to_data_names(args.region,
+                                                                                                        high_res = args.high_res,
+                                                                                                        include_hrrr = args.include_hrrr) 
 
     verif = precip_verification_processor.PrecipVerificationProcessor(args.start_dt_str, 
                                                                       args.end_dt_str,
