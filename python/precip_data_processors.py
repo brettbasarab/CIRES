@@ -106,8 +106,10 @@ def format_short_name(data_array):
 # Interpolate <input_data_array> to the grid of <destination_data_array>.
 # The only interpolation method used currently is bilinear interpolation.
 # TODO: Add additional interpolation methods appropriate for precipitation, like conservative and patch.
-def spatially_interpolate_using_interp_like(input_data_array, destination_data_array, correct_small_negative_values = True):
-    data_array_destination_grid = input_data_array.interp_like(destination_data_array)
+def spatially_interpolate_using_interp_like(input_data_array, destination_data_array,
+                                            interp_method = "linear",
+                                            correct_small_negative_values = True):
+    data_array_destination_grid = input_data_array.interp_like(destination_data_array, method = interp_method)
 
     # Very small-magnitude negative values are introduced by this interpolation. Set values just below zero to zero.
     # Don't change larger-magnitude negative values, as these could indicate a legitimate problem.
@@ -552,6 +554,7 @@ class ImergDataProcessor(ReplayDataProcessor):
                        MODEL_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
                        model_temporal_res = 3,
                        model_name = "Replay",
+                       interp_method = "linear",
                        region = "Global",
                        user_dir = "bbasarab"):
 
@@ -601,6 +604,7 @@ class ImergDataProcessor(ReplayDataProcessor):
                              user_dir = user_dir)
             self.model_name = model_name
             self.model_temporal_res = model_temporal_res
+            self.interp_method = interp_method
             self.model_data_array = self.get_replay_precip_data() 
             self._spatially_interpolate_imerg_to_model_grid()
 
@@ -850,7 +854,8 @@ class ImergDataProcessor(ReplayDataProcessor):
 
         # Spatially interpolate IMERG data to the model grid
         self.precip_model_grid = spatially_interpolate_using_interp_like(imerg_precip_to_interpolate,
-                                                                         self.model_data_array,   
+                                                                         self.model_data_array,
+                                                                         interp_method = self.interp_method, 
                                                                          correct_small_negative_values = True)   
 
     ##### PUBLIC METHODS (ImergDataProcessor) #####
@@ -905,6 +910,7 @@ class ERA5DataProcessor(ReplayDataProcessor):
                        MODEL_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
                        model_temporal_res = 3,
                        model_name = "Replay",
+                       interp_method = "linear",
                        region = "Global",
                        user_dir = "bbasarab"):
 
@@ -954,6 +960,7 @@ class ERA5DataProcessor(ReplayDataProcessor):
                              user_dir = user_dir)
             self.model_name = model_name
             self.model_temporal_res = model_temporal_res
+            self.interp_method = interp_method
             self.model_data_array = self.get_replay_precip_data() 
             self._spatially_interpolate_era5_to_model_grid()
 
@@ -1105,7 +1112,8 @@ class ERA5DataProcessor(ReplayDataProcessor):
                                                                spatial_res = "native").copy()
 
         self.precip_model_grid = spatially_interpolate_using_interp_like(era5_precip_to_interpolate,
-                                                                         self.model_data_array,   
+                                                                         self.model_data_array,
+                                                                         interp_method = self.interp_method, 
                                                                          correct_small_negative_values = True)   
     
     ##### PUBLIC METHODS (ERA5DataProcessor) #####
@@ -1160,6 +1168,7 @@ class AorcDataProcessor(ReplayDataProcessor):
                        MODEL_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
                        model_temporal_res = 3,
                        model_name = "Replay",
+                       interp_method = "linear",
                        region = "Global",
                        user_dir = "bbasarab"):
 
@@ -1209,6 +1218,7 @@ class AorcDataProcessor(ReplayDataProcessor):
                              user_dir = user_dir)
             self.model_name = model_name
             self.model_temporal_res = model_temporal_res
+            self.interp_method = interp_method
             self.model_data_array = self.get_replay_precip_data() 
             self._spatially_interpolate_aorc_to_model_grid()
 
@@ -1347,7 +1357,8 @@ class AorcDataProcessor(ReplayDataProcessor):
         aorc_precip_to_interpolate = aorc_precip_to_interpolate.sortby("lon") 
 
         self.precip_model_grid = spatially_interpolate_using_interp_like(aorc_precip_to_interpolate,
-                                                                         self.model_data_array,   
+                                                                         self.model_data_array,
+                                                                         interp_method = self.interp_method, 
                                                                          correct_small_negative_values = True)   
     
     ##### PUBLIC METHODS (AorcDataProcessor) #####
@@ -1403,6 +1414,7 @@ class CONUS404DataProcessor(object):
                        DEST_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to a different destination grid 
                        dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to different destination grid (NOT the same as model_temporal_res in other classes)
                        dest_grid_name = "Replay",
+                       interp_method = "linear",
                        region = "CONUS",
                        user_dir = "bbasarab"):
  
@@ -1443,6 +1455,7 @@ class CONUS404DataProcessor(object):
         if self.DEST_GRID_FLAG:
             self.dest_grid_name = dest_grid_name
             self.dest_temporal_res = dest_temporal_res
+            self.interp_method = interp_method
         else:
             self._read_conus404_dataset_from_azure()
 
@@ -1591,13 +1604,16 @@ class CONUS404DataProcessor(object):
             print(f"Creating directory {output_dir}")
             os.mkdir(output_dir)
             
+        # Set CDO interpolation type flag
+        cdo_interp_type = utils.set_cdo_interpolation_type(self.interp_method) 
+
         # Loop through each file, interpolating using cdo command line utility
         for input_fpath in native_grid_file_list:
             print(f"Interpolating {input_fpath} from {self.data_name} native grid to {self.dest_grid_name} grid")
             dstr = os.path.basename(input_fpath).split(".")[3]
             output_file = f"{self.data_name}.{output_grid_string}.{self.dest_temporal_res:02d}_hour_precipitation.{dstr}{hour_span_timestamp}.nc" 
             output_fpath = os.path.join(output_dir, output_file)
-            cdo_cmd = f"cdo -P 8 remapbil,{template_fpath} {input_fpath} {output_fpath}"
+            cdo_cmd = f"cdo -P 8 {cdo_interp_type},{template_fpath} {input_fpath} {output_fpath}"
             print(f"Executing: {cdo_cmd}")
             os.system(cdo_cmd)
 
@@ -1685,6 +1701,7 @@ class NestedReplayDataProcessor(object):
                        DEST_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to a different destination grid 
                        dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to different destination grid
                        dest_grid_name = "AORC",
+                       interp_method = "linear",
                        region = "CONUS",
                        replay_segment = "corrector",
                        user_dir = "bbasarab"):
@@ -1730,6 +1747,7 @@ class NestedReplayDataProcessor(object):
         if self.DEST_GRID_FLAG:
             self.dest_grid_name = dest_grid_name
             self.dest_temporal_res = dest_temporal_res
+            self.interp_method = interp_method
             self._spatially_interpolate_nested_replay_to_dest_grid()
 
     ##### GETTER METHODS (NestedReplayDataProcessor) #####
@@ -1852,7 +1870,8 @@ class NestedReplayDataProcessor(object):
 
         # Spatially interpolate Nested Replay data to output grid 
         self.precip_dest_grid = spatially_interpolate_using_interp_like(nested_replay_precip_to_interpolate,
-                                                                        self.dest_data_array,   
+                                                                        self.dest_data_array,
+                                                                        interp_method = self.interp_method, 
                                                                         correct_small_negative_values = True)   
 
     # Use cdo command line utility to interpolate from the native NestedReplay grid
@@ -1898,6 +1917,9 @@ class NestedReplayDataProcessor(object):
         if (not os.path.exists(output_dir)):
             print(f"Creating directory {output_dir}")
             os.mkdir(output_dir)
+        
+        # Set CDO interpolation type flag
+        cdo_interp_type = utils.set_cdo_interpolation_type(self.interp_method) 
             
         # Loop through each file, interpolating using cdo command line utility
         for input_fpath in native_grid_file_list:
@@ -1905,7 +1927,7 @@ class NestedReplayDataProcessor(object):
             dstr = os.path.basename(input_fpath).split(".")[3]
             output_file = f"{self.data_name}.{output_grid_string}.{self.dest_temporal_res:02d}_hour_precipitation.{dstr}.nc" 
             output_fpath = os.path.join(output_dir, output_file)
-            cdo_cmd = f"cdo -P 8 remapbil,{template_fpath} {input_fpath} {output_fpath}"
+            cdo_cmd = f"cdo -P 8 {cdo_interp_type},{template_fpath} {input_fpath} {output_fpath}"
             print(f"Executing: {cdo_cmd}")
             os.system(cdo_cmd)
 

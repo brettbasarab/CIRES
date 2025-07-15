@@ -204,6 +204,8 @@ def set_cdo_interpolation_type(args_flag):
     match args_flag:
         case "bilinear": # Bilinear interpolation
             return "remapbil"
+        case "linear": # Bilinear interpolation
+            return "remapbil"
         case "conservative": # First-order conservative interpolation
             return "remapcon"
         case "conservative2": # Second-order conservative interpolation
