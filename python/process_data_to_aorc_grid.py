@@ -11,7 +11,7 @@ def main():
                            "Date formats for <start_dt_str> and <end_dt_str> are YYYYmmdd.HH, PERIOD-ENDING\n")
     parser = argparse.ArgumentParser(description = program_description)
     parser.add_argument("data_name",
-                        help = "Name to use for the data to be processed. Currently supported options are AORC, CONUS404, NestedReplay, and HRRR.")
+                        help = "Name to use for the data to be processed. Currently supported options are AORC, CONUS404, NestedReplay, and Replay.")
     parser.add_argument("start_dt_str",
                         help = "Start date of time period over which to process data")
     parser.add_argument("end_dt_str",
@@ -62,6 +62,13 @@ def main():
                                                                          dest_temporal_res = args.output_temporal_res,
                                                                          replay_segment = args.replay_segment, 
                                                                          region = args.region)
+        case "Replay":
+            processor = precip_data_processors.ReplayDataProcessor(args.start_dt_str,
+                                                                   args.end_dt_str,
+                                                                   DEST_GRID_FLAG = dest_grid_flag,
+                                                                   dest_grid_name = args.output_grid,
+                                                                   dest_temporal_res = args.output_temporal_res,
+                                                                   region = args.region)
         case _:
             print(f"Sorry, data grid processing for dataset {args.data_name} is not currently supported")
             sys.exit(0)
@@ -69,10 +76,16 @@ def main():
     # Write precipitation data to netCDF 
     if (args.write_to_nc):
         print("**** Writing data to netCDF") 
-        processor.write_precip_data_to_netcdf(temporal_res = args.output_temporal_res,
-                                              spatial_res = output_spatial_res,
-                                              file_cadence = args.nc_file_cadence,
-                                              testing = args.test_nc) 
+        if (args.data_name == "Replay"):
+            processor.write_replay_precip_data_to_netcdf(temporal_res = args.output_temporal_res,
+                                                         spatial_res = output_spatial_res,
+                                                         file_cadence = args.nc_file_cadence,
+                                                         testing = args.test_nc)
+        else:
+            processor.write_precip_data_to_netcdf(temporal_res = args.output_temporal_res,
+                                                  spatial_res = output_spatial_res,
+                                                  file_cadence = args.nc_file_cadence,
+                                                  testing = args.test_nc) 
  
     # Plot contour maps for visual inspection
     if (args.plot_maps):

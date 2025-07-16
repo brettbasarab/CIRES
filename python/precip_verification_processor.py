@@ -57,7 +57,7 @@ def map_region_to_data_names(region, verif_grid = utils.Replay_data_name, includ
                       utils.IMERG_data_name, utils.Replay_data_name] # ["AORC", "CONUS404", "ERA5", "IMERG", "Replay"]
         if (verif_grid == utils.AORC_data_name): 
             data_grid = utils.AORC_data_name
-            data_names = [utils.AORC_data_name, utils.CONUS404_data_name, utils.NestedReplay_data_name] # ["AORC", "CONUS404", "NestedReplay"]
+            data_names = [utils.AORC_data_name, utils.CONUS404_data_name, utils.NestedReplay_data_name, utils.Replay_data_name] # ["AORC", "CONUS404", "NestedReplay", "Replay"]
         if include_hrrr:
             data_names.append(utils.HRRR_data_name)
     else: 
