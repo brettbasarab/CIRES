@@ -30,12 +30,12 @@ def main():
                         help = "Temporal resolution of precip data used in verification (default 24)")
     parser.add_argument("--data_names_list", dest = "data_names_list", default = None, nargs = "+",
                         help = "List of data names to verify; pass space-separated with the truth data name listed first; if None, all possible datasets for the given region are verified")
-    parser.add_argument("--grid_cell_size", dest = "grid_cell_size", type = float, default = utils.replay_grid_cell_size, 
-                        help = f"Assumed grid cell size for FSS and other calculations; default Replay grid cell size of {utils.replay_grid_cell_size} degrees")
+    parser.add_argument("--grid_cell_size", dest = "grid_cell_size", type = float, default = None, 
+                        help = f"Assumed grid cell size for FSS and other calculations; default None to use AORC or global Replay grid cell size depending on args.verif_grid.")
     parser.add_argument("--time_period_types", dest = "time_period_types", default = ["full_period", "common_seasonal", "common_monthly"], nargs = "+", 
                         help = "Time period types over which to perform analysis; default ['full_period', 'common_seasonal', 'common_monthly']")
-    parser.add_argument("--high_res", dest = "high_res", action = "store_true", default = False,
-                        help = "Set to verify CONUS high-resolution datasets (AORC, CONUS404, NestedReplay, etc.)")
+    parser.add_argument("--verif_grid", dest = "verif_grid", default = "Replay", choices = ["AORC", "Replay"],
+                        help = "Set a standard verification grid for CONUS (or subregions) verification [AORC and (global) Replay are currently supported; default Replay]")
     parser.add_argument("--include_hrrr", dest = "include_hrrr", action = "store_true", default = False,
                         help = "Set to include HRRR in verification")
     # Statistics flags: set which statistic(s) to calculated
@@ -68,8 +68,16 @@ def main():
         data_names, truth_data_name, data_grid = args.data_names_list, args.data_names_list[0]
     else:
         data_names, truth_data_name, data_grid = precip_verification_processor.map_region_to_data_names(args.region,
-                                                                                                        high_res = args.high_res,
-                                                                                                        include_hrrr = args.include_hrrr) 
+                                                                                                        verif_grid = args.verif_grid,
+                                                                                                        include_hrrr = args.include_hrrr)
+
+    # Set grid cell size for FSS calculations
+    grid_cell_size = args.grid_cell_size
+    if (grid_cell_size is None):
+        grid_cell_size = utils.replay_grid_cell_size
+        if (args.verif_grid == "AORC"):
+            grid_cell_size = utils.aorc_grid_cell_size 
+    print(f"Grid cell size: {grid_cell_size} degrees")
 
     verif = precip_verification_processor.PrecipVerificationProcessor(args.start_dt_str, 
                                                                       args.end_dt_str,
@@ -113,7 +121,7 @@ def main():
                 verif.plot_cmap_multi_panel(data_dict = agg_dict, single_colorbar = True, single_set_of_levels = False, plot_errors = False)
                 verif.plot_cmap_multi_panel(data_dict = agg_dict, single_colorbar = False, single_set_of_levels = False, plot_errors = True)
     
-    eval_radius_list = utils.default_eval_radius_list_grid_cells * args.grid_cell_size
+    eval_radius_list = utils.default_eval_radius_list_grid_cells * grid_cell_size
     # Calculate and plot fractions skill score (FSS) by radius and amount threshold
     if args.fss:
         print("******** Calculating FSS (using amount thresholds)")
@@ -121,7 +129,7 @@ def main():
 
         # Calculate FSS by radius, using a fixed amount threshold 
         fss_dict_by_radius = verif.calculate_fss(eval_type = "by_radius",
-                                                 grid_cell_size = args.grid_cell_size,
+                                                 grid_cell_size = grid_cell_size,
                                                  fixed_threshold = 10, # mm 
                                                  eval_radius_list = eval_radius_list, 
                                                  is_pctl_threshold = False, 
@@ -130,8 +138,8 @@ def main():
 
         # Calculate FSS by amount threshold, using a fixed evaluation radius
         fss_dict_by_thresh = verif.calculate_fss(eval_type = "by_threshold",
-                                                 grid_cell_size = args.grid_cell_size,
-                                                 fixed_radius = 2 * args.grid_cell_size, # degrees
+                                                 grid_cell_size = grid_cell_size,
+                                                 fixed_radius = 2 * grid_cell_size, # degrees
                                                  eval_threshold_list = eval_threshold_list,
                                                  is_pctl_threshold = False,
                                                  include_zeros = False,
@@ -158,7 +166,7 @@ def main():
 
         # Calculate FSS by radius, using a fixed amount threshold 
         fss_dict_by_radius = verif.calculate_fss(eval_type = "by_radius",
-                                                 grid_cell_size = args.grid_cell_size,
+                                                 grid_cell_size = grid_cell_size,
                                                  fixed_threshold = 95, # percentile 
                                                  eval_radius_list = eval_radius_list, 
                                                  is_pctl_threshold = True, 
@@ -167,8 +175,8 @@ def main():
 
         # Calculate FSS by amount threshold, using a fixed evaluation radius
         fss_dict_by_thresh = verif.calculate_fss(eval_type = "by_threshold",
-                                                 grid_cell_size = args.grid_cell_size,
-                                                 fixed_radius = 2 * args.grid_cell_size, # degrees
+                                                 grid_cell_size = grid_cell_size,
+                                                 fixed_radius = 2 * grid_cell_size, # degrees
                                                  eval_threshold_list = eval_threshold_list,
                                                  is_pctl_threshold = True,
                                                  include_zeros = False, # whether to include zeros in percentile calculations
@@ -194,15 +202,15 @@ def main():
 
         # Calculate FSS by radius, using an ARI grid threshold
         fss_dict_by_radius = verif.calculate_fss(eval_type = "by_radius_ari_threshold",
-                                                 grid_cell_size = args.grid_cell_size,
+                                                 grid_cell_size = grid_cell_size,
                                                  fixed_ari_threshold = 2, # 2-year ARI grid 
                                                  eval_radius_list = eval_radius_list,
                                                  write_to_nc = args.write_to_nc)
 
         # Calculate FSS by ARI grid (using varying ARI grids thresholds) 
         fss_dict_by_ari = verif.calculate_fss(eval_type = "by_ari_grid",
-                                              grid_cell_size = args.grid_cell_size,
-                                              fixed_radius = 2 * args.grid_cell_size, # degrees
+                                              grid_cell_size = grid_cell_size,
+                                              fixed_radius = 2 * grid_cell_size, # degrees
                                               eval_ari_list = utils.default_eval_ari_list_years,
                                               write_to_nc = args.write_to_nc)
 

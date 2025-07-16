@@ -58,8 +58,9 @@ aorc_grid_cell_size = 0.033332
 # Default list of evaluation radii (number of grid cells)
 default_eval_radius_list_grid_cells = np.array([1, 2, 3, 4, 6, 8, 12, 20, 40, 80])
 
-# Default list of evaluation radii (degrees latitude/longitude) 
-default_eval_radius_list_deg = np.array([0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0, 20.0])
+# Default list of evaluation radii (degrees latitude/longitude, for a 0.25 degree grid) 
+#default_eval_radius_list_deg = np.array([0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0, 20.0])
+default_eval_radius_list_deg = np.copy(default_eval_radius_list_grid_cells) * 0.25
 
 # Default list of evaluation thresholds (mm)
 default_eval_threshold_list_mm = np.array([1.0, 2.0, 5.0, 10.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 70.0, 75.0, 80.0, 90.0, 100.0])
@@ -69,6 +70,14 @@ default_eval_threshold_list_pctl = np.array([5.0, 10.0, 25.0, 50.0, 75.0, 90.0, 
 
 # Default list of ARI grids to use as thresholds (years) 
 default_eval_ari_list_years = np.array([1, 2, 5, 10, 25, 50, 100])
+
+AORC_data_name = "AORC"
+CONUS404_data_name = "CONUS404"
+ERA5_data_name = "ERA5"
+HRRR_data_name = "HRRR"
+IMERG_data_name = "IMERG"
+NestedReplay_data_name = "NestedReplay"
+Replay_data_name = "Replay"
 
 # DATA DIRECTORY PATHS 
 #################################################################################

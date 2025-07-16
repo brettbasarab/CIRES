@@ -49,20 +49,21 @@ evaluate_by_ari_kw_str = "by_ari_grid"
 
 # For a given region, return a list of the names of the datasets currently used
 # in verification, as well as the dataset that will be considered truth (truth_data_name)
-def map_region_to_data_names(region, high_res = False, include_hrrr = False):
+def map_region_to_data_names(region, verif_grid = utils.Replay_data_name, include_hrrr = False):
     if ("US" in region): 
-        truth_data_name =  "AORC"
-        data_grid = "Replay"
-        data_names = ["AORC", "CONUS404", "ERA5", "IMERG", "Replay"]
-        if high_res:
-            data_grid = "AORC"
-            data_names = ["AORC", "CONUS404", "NestedReplay"]
+        truth_data_name = utils.AORC_data_name 
+        data_grid = utils.Replay_data_name 
+        data_names = [utils.AORC_data_name, utils.CONUS404_data_name, utils.ERA5_data_name,
+                      utils.IMERG_data_name, utils.Replay_data_name] # ["AORC", "CONUS404", "ERA5", "IMERG", "Replay"]
+        if (verif_grid == utils.AORC_data_name): 
+            data_grid = utils.AORC_data_name
+            data_names = [utils.AORC_data_name, utils.CONUS404_data_name, utils.NestedReplay_data_name] # ["AORC", "CONUS404", "NestedReplay"]
         if include_hrrr:
-            data_names.append("HRRR")
+            data_names.append(utils.HRRR_data_name)
     else: 
-        truth_data_name = "IMERG"
-        data_grid = "Replay"
-        data_names = ["IMERG", "Replay", "ERA5"]
+        truth_data_name = utils.IMERG_data_name
+        data_grid = utils.Replay_data_name
+        data_names = [utils.IMERG_data_name, utils.Replay_data_name, utils.ERA5_data_name] # ["IMERG", "Replay", "ERA5"]
 
     return sorted(data_names), truth_data_name, data_grid
 
@@ -870,7 +871,7 @@ class PrecipVerificationProcessor(object):
                         f_obs_list.append(F_obs)
                     continue
 
-                # Calculate FSS for varying evaluation radius, fixed threshold
+                # Calculate FSS
                 qpf = da.sel(period_end_time = valid_dt_str)
                 fss_list = []
                 if (eval_type == evaluate_by_radius_kw_str):
@@ -1277,7 +1278,7 @@ class PrecipVerificationProcessor(object):
     # evenly divisible by <grid_cell_size>, e.g., radius = 0.5 degrees; grid_cell_size = 0.25 degrees.
     # Specifically, if this is not the case, the function will return a square of all 1s in some cases,
     # rather than a square of 0s circumscribing a circle of 1s. This may be OK (won't fix) because it
-    # probably doesn't make sense to use a radius equal to a non-integer number of grid cells.
+    # doesn't make sense to use a radius that's equivalent to a non-integer number of grid cells.
     def _get_footprint_for_fss(self, radius, grid_cell_size):
         radius_number_grid_cells = int(radius/grid_cell_size)
 
