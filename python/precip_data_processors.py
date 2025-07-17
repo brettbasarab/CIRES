@@ -224,7 +224,7 @@ class ReplayDataProcessor(object):
                  model_name = "Replay",
                  temporal_res = 3,
                  dest_grid_native_temporal_res = 1, # Native temporal resolution of the destination grid to interpolate to (e.g., 1-hourly for AORC)
-                 DEST_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to a different destination grid 
+                 DEST_GRID_FLAG = False, # Flag set to True if we are reading in and interpolating to a different destination grid 
                  dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to different destination grid
                  dest_grid_name = "AORC",
                  interp_method = "linear",
@@ -472,6 +472,12 @@ class ReplayDataProcessor(object):
         # Calculation of accmulated amounts at different temporal resolutions is handled by
         # _calculate_replay_accum_precip_amount.
         replay_precip_to_interpolate = self.get_replay_precip_data(time_period_hours = self.temporal_res).copy()
+        
+        # Change longitude coordinates of Replay to go from [-180, 180] to match AORC coordinates.
+        if (self.dest_grid_name == "AORC"):
+            replay_lons_m180to180 = utils.longitude_to_m180to180(replay_precip_to_interpolate["lon"].values)
+            replay_precip_to_interpolate["lon"] = replay_lons_m180to180
+            replay_precip_to_interpolate = replay_precip_to_interpolate.sortby("lon") 
         
         # Change latitude coordinates of Replay to go from south->north to match AORC coordinates.
         #if (self.dest_grid_name == "AORC"):
