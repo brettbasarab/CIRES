@@ -31,9 +31,74 @@ def main():
                         help = "Set to create and plot CDFs")
     parser.add_argument("-p", "--plot", dest = "plot", action = "store_true", default = False,
                         help = "Set to make contour maps to visualize differences between interpolated datasets")
+    parser.add_argument("--exclude_zeros", dest = "exclude_zeros", action = "store_true", default = False,
+                        help = "Set to exclude zeros from CDFs and stats")
     args = parser.parse_args()
 
-    current_dt = dt.datetime.strptime(args.dt_str, "%Y%m%d")
+    print(f"***** TIME PERIOD: {args.dt_str}")
+    main_dir = "/data/bbasarab/netcdf/testing"
+
+    # Native
+    fpath_str = os.path.join(main_dir, f"AORC*NativeGrid*{args.dt_str}*.nc")
+    print(f"Reading {fpath_str}")
+    precip_native = convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip)
+
+    # Bilinear
+    fpath_str = os.path.join(main_dir, f"AORC*bilinear*{args.dt_str}*.nc")
+    print(f"Reading {fpath_str}")
+    precip_bil = convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip)
+
+    # Conservative
+    fpath_str = os.path.join(main_dir, f"AORC*conservative*{args.dt_str}*.nc")
+    print(f"Reading {fpath_str}")
+    precip_con = convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip)
+    
+    # Nearest
+    fpath_str = os.path.join(main_dir, f"AORC*nearest*{args.dt_str}*.nc")
+    print(f"Reading {fpath_str}")
+    precip_nbr = convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip)
+
+    data_dict_tmp = {"Native": precip_native, "Bilinear": precip_bil, "Conservative": precip_con, "Nearest": precip_nbr}
+
+    if args.exclude_zeros:
+        data_dict_new = {} 
+        print("EXCLUDING ZEROS")
+        plot_name = f"AORC_interp_methods exclude zeros: {args.temporal_res:02d}-hour precip, {args.dt_str}"
+        fig_name = f"AORC_interp_methods.exclude_zeros.{args.temporal_res:02d}_hour_precipitation.{args.dt_str}"
+        ylims = [0.0, 1.0] 
+        for data_name, da in data_dict_tmp.items():
+            data_dict_new[data_name] = da.where(da > 0.0) 
+        data_dict = data_dict_new
+    else:
+        plot_name = f"AORC_interp_methods: {args.temporal_res:02d}-hour precip, {args.dt_str}"
+        fig_name = f"AORC_interp_methods.{args.temporal_res:02d}_hour_precipitation.{args.dt_str}" 
+        ylims = [0.75, 1.0] 
+        data_dict = data_dict_tmp
+
+    ##### Plot CDFs
+    print("Plotting CDFs")
+    pputils.plot_precip_cdf(data_dict,
+                            plot_name, 
+                            fig_name, 
+                            valid_dtime = None, 
+                            xticks = np.arange(0, 55, 5),
+                            yticks = np.arange(0.0, 1.05, 0.05),
+                            xlims = [0, 50],
+                            ylims = ylims, 
+                            skip_nearest = False)
+
+    ##### Calculate stats
+    for data_name, da in data_dict.items():
+        print(f"***** {data_name}:")
+        print(f"Min: {da.min().item()}")
+        print(f"Mean: {da.mean().item()}")
+        print(f"Median: {da.median().item()}")
+        print(f"Max: {da.max().item()}")
+        print(f"95.0th pctl: {da.quantile(0.95).item()}")
+        print(f"99.0th pctl: {da.quantile(0.99).item()}")
+        print(f"99.9th pctl: {da.quantile(0.999).item()}")
+
+    """current_dt = dt.datetime.strptime(args.dt_str, "%Y%m%d")
     fpath_native = os.path.join("/Projects/AORC_CONUS_4km", f"{current_dt:%Y}", f"prate.aorc.{current_dt:%Y%m%d}.nc")
     if not(os.path.exists(fpath_native)):
         print(f"Error: Input AORC file to interpolate {fpath_native} does not exist")
@@ -189,7 +254,8 @@ def main():
         print(f"95.0th pctl: {da.quantile(0.95).item()}")
         print(f"99.0th pctl: {da.quantile(0.99).item()}")
         print(f"99.9th pctl: {da.quantile(0.999).item()}")
-        
+    """
+
     return data_dict
 
 def calculate_24hr_accum_precip(hourly_aorc_data):

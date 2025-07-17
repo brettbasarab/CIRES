@@ -922,7 +922,7 @@ class ImergDataProcessor(ReplayDataProcessor):
                                                            spatial_res = "native").copy()
 
         # Change longitude coordinates of IMERG to go from [0, 360] to match Replay coordinates.
-        if (self.model_grid == "Replay"):
+        if (self.model_name == "Replay"):
             imerg_lons_0to360 = utils.longitude_to_0to360(imerg_precip_to_interpolate["lon"].values)
             imerg_precip_to_interpolate["lon"] = imerg_lons_0to360 
             imerg_precip_to_interpolate = imerg_precip_to_interpolate.sortby("lon") 
@@ -1427,7 +1427,7 @@ class AorcDataProcessor(ReplayDataProcessor):
         aorc_precip_to_interpolate = self.get_precip_data(temporal_res = self.model_temporal_res, spatial_res = "native").copy()
 
         # Change longitude coordinates of AORC to be a subset of [0, 360] to  match Replay coordinates.
-        if (self.model_grid == "Replay"):
+        if (self.model_name == "Replay"):
             aorc_lons_0to360 = utils.longitude_to_0to360(aorc_precip_to_interpolate["lon"].values)
             aorc_precip_to_interpolate["lon"] = aorc_lons_0to360 
             aorc_precip_to_interpolate = aorc_precip_to_interpolate.sortby("lon") 
