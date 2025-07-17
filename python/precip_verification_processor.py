@@ -51,19 +51,27 @@ evaluate_by_ari_kw_str = "by_ari_grid"
 # in verification, as well as the dataset that will be considered truth (truth_data_name)
 def map_region_to_data_names(region, verif_grid = utils.Replay_data_name, include_hrrr = False):
     if ("US" in region): 
-        truth_data_name = utils.AORC_data_name 
-        data_grid = utils.Replay_data_name 
-        data_names = [utils.AORC_data_name, utils.CONUS404_data_name, utils.ERA5_data_name,
-                      utils.IMERG_data_name, utils.Replay_data_name] # ["AORC", "CONUS404", "ERA5", "IMERG", "Replay"]
+        truth_data_name = utils.AORC_data_name # "AORC" 
+        data_grid = utils.Replay_data_name # "Replay"
+        data_names = [utils.AORC_data_name,
+                      utils.CONUS404_data_name,
+                      utils.ERA5_data_name,
+                      utils.IMERG_data_name,
+                      utils.Replay_data_name] # ["AORC", "CONUS404", "ERA5", "IMERG", "Replay"]
         if (verif_grid == utils.AORC_data_name): 
-            data_grid = utils.AORC_data_name
-            data_names = [utils.AORC_data_name, utils.CONUS404_data_name, utils.NestedReplay_data_name, utils.Replay_data_name] # ["AORC", "CONUS404", "NestedReplay", "Replay"]
+            data_grid = utils.AORC_data_name # "AORC"
+            data_names = [utils.AORC_data_name,
+                          utils.CONUS404_data_name,
+                          utils.NestedReplay_data_name,
+                          utils.Replay_data_name] # ["AORC", "CONUS404", "NestedReplay", "Replay"]
         if include_hrrr:
-            data_names.append(utils.HRRR_data_name)
+            data_names.append(utils.HRRR_data_name) # "HRRR"
     else: 
-        truth_data_name = utils.IMERG_data_name
-        data_grid = utils.Replay_data_name
-        data_names = [utils.IMERG_data_name, utils.Replay_data_name, utils.ERA5_data_name] # ["IMERG", "Replay", "ERA5"]
+        truth_data_name = utils.IMERG_data_name # "IMERG"
+        data_grid = utils.Replay_data_name # "Replay"
+        data_names = [utils.IMERG_data_name,
+                      utils.Replay_data_name,
+                      utils.ERA5_data_name] # ["IMERG", "Replay", "ERA5"]
 
     return sorted(data_names), truth_data_name, data_grid
 
