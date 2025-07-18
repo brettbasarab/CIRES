@@ -12,6 +12,8 @@ import precip_plotting_utilities as pputils
 import sys
 import utilities as utils
 import xarray as xr
+
+# Interpolate AORC data to global Replay grid
     
 # Selected Replay data already output to netCDF to use as template file for interpolation
 nc_dir = "/data/bbasarab/netcdf"
@@ -22,7 +24,7 @@ def main():
     utils.suppress_warnings()
     parser = argparse.ArgumentParser(description = "Interpolate AORC data using cdo command line utility; plot native and interpolated data")
     parser.add_argument("dt_str", 
-                        help = "Date to process; format YYYYmmdd")
+                        help = "Date to process; format YYYYmm")
     parser.add_argument("-t", "--temporal_res", dest = "temporal_res", type = int, default = 24,
                         help = "Temporal resolution of data to interpolate in hours; default 24")
     parser.add_argument("-i", "--interp", dest = "interp", action = "store_true", default = False,
@@ -41,22 +43,22 @@ def main():
     # Native
     fpath_str = os.path.join(main_dir, f"AORC*NativeGrid*{args.dt_str}*.nc")
     print(f"Reading {fpath_str}")
-    precip_native = convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip)
+    precip_native = utils.convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip)
 
     # Bilinear
     fpath_str = os.path.join(main_dir, f"AORC*bilinear*{args.dt_str}*.nc")
     print(f"Reading {fpath_str}")
-    precip_bil = convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip)
+    precip_bil = utils.convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip)
 
     # Conservative
     fpath_str = os.path.join(main_dir, f"AORC*conservative*{args.dt_str}*.nc")
     print(f"Reading {fpath_str}")
-    precip_con = convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip)
+    precip_con = utils.convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip)
     
     # Nearest
     fpath_str = os.path.join(main_dir, f"AORC*nearest*{args.dt_str}*.nc")
     print(f"Reading {fpath_str}")
-    precip_nbr = convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip)
+    precip_nbr = utils.convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip)
 
     data_dict_tmp = {"Native": precip_native, "Bilinear": precip_bil, "Conservative": precip_con, "Nearest": precip_nbr}
 
@@ -163,7 +165,7 @@ def main():
         precip = precip.loc[f"{current_dt:%Y-%m-%d 01:00:00}":f"{current_dt_p1:%Y-%m-%d 00:00:00}"]
 
         # Output 24-hour precip at native spatial resolution to netCDF
-        accum_precip24 = convert_from_dask_array(calculate_24hr_accum_precip(precip))
+        accum_precip24 = utils.convert_from_dask_array(calculate_24hr_accum_precip(precip))
         fpath_native24 = os.path.join(nc_testing_dir, f"AORC.NativeGrid.24_hour_precipitation.{current_dt:%Y%m%d}.nc")
         print(f"Writing 24-hour precip at native resolution to {fpath_native24}")
         accum_precip24.period_end_time.encoding["units"] = utils.seconds_since_unix_epoch_str
@@ -292,16 +294,6 @@ def rename_dims(data_array):
                              "latitude": "lat",
                              "longitude": "lon",
                              }) 
-
-# TODO: Understand why the instances where I need to apply this function
-# are dask arrays in the first place, and whether there's a more elegant way to
-# handle them (can't call basic methods like .quantile(), .item() due to the structure of dask arrays)
-def convert_from_dask_array(dask_array):
-    da = xr.DataArray(dask_array.values, dims = dask_array.dims, coords = dask_array.coords,
-                      attrs = dask_array.attrs)
-    da.name = "accum_precip"
-
-    return da
 
 if __name__ == "__main__":
     data_dict = main() 

@@ -225,6 +225,18 @@ def set_cdo_interpolation_type(args_flag):
             print(f"Unrecognized interpolation type {args_flag}; will perform bilinear interpolation")
             return "remapbil"
 
+# XARRAY/NUMPY DATA ARRAY MANAGEMENT
+#################################################################################
+# TODO: Understand why the instances for which this function is necessary
+# are dask arrays in the first place, and whether there's a more elegant way to
+# handle them (can't call basic methods like .quantile(), .item() due to the structure of dask arrays)
+def convert_from_dask_array(dask_array):
+    da = xr.DataArray(dask_array.values, dims = dask_array.dims, coords = dask_array.coords,
+                      attrs = dask_array.attrs)
+    da.name = "accum_precip"
+
+    return da
+
 # COMMAND MANAGEMENT
 #################################################################################
 # Communicate command output using subprocess

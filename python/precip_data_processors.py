@@ -478,13 +478,6 @@ class ReplayDataProcessor(object):
             replay_lons_m180to180 = utils.longitude_to_m180to180(replay_precip_to_interpolate["lon"].values)
             replay_precip_to_interpolate["lon"] = replay_lons_m180to180
             replay_precip_to_interpolate = replay_precip_to_interpolate.sortby("lon") 
-        
-        # Change latitude coordinates of Replay to go from south->north to match AORC coordinates.
-        #if (self.dest_grid_name == "AORC"):
-        #    print("FLIPPING LATS")
-        #    lats_south_to_north = replay_precip_to_interpolate.lat.values[::-1] 
-        #    replay_precip_to_interpolate["lat"] = lats_south_to_north 
-        #    replay_precip_to_interpolate = replay_precip_to_interpolate.sortby("lat") 
 
         # Get destination data array by instantiating the apppropriate class
         match self.dest_grid_name:
