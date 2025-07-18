@@ -1824,7 +1824,7 @@ class PrecipVerificationProcessor(object):
                 title_string = f"Common seasonal {title_string}: {time_period_str}"
                 xlabel = "Seasons"
 
-        fig_name = f"timeseries.{fig_name_prefix}.{axis_label}.{time_period_str}.{self.region}.png"
+        fig_name = f"timeseries.{self.data_names_str}.{fig_name_prefix}.{axis_label}.{time_period_str}.{self.region}.png"
         dtimes, time_dim, dt_format = self._create_datetime_list_from_da_time_dim(truth_da)
        
         # Plot the data
