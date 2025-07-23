@@ -44,9 +44,6 @@ evaluate_by_threshold_kw_str = "by_threshold"
 # Keyword to evaluate FSS using varying ARI grids as thresholds
 evaluate_by_ari_kw_str = "by_ari_grid"
 
-# List of variables that can be used as keyword to evaluate FSS for varying radius
-#evaluate_by_radius_kw_options = [evaluate_by_radius_kw_str, "radius", "r"]
-
 # For a given region, return a list of the names of the datasets currently used
 # in verification, as well as the dataset that will be considered truth (truth_data_name)
 def map_region_to_data_names(region, verif_grid = utils.Replay_data_name, include_hrrr = False):
@@ -132,6 +129,7 @@ class PrecipVerificationProcessor(object):
         self.end_dt_str = end_dt_str
         print(f"Start datetime: {self.start_dt_str}")
         print(f"End datetime: {self.end_dt_str}")
+        print(f"Temporal resolution (hours): {self.temporal_res}")
         self._construct_valid_dt_list()
 
         # Load data for verification 
@@ -245,7 +243,9 @@ class PrecipVerificationProcessor(object):
         else:
             raise NotImplementedError
         self.time_period_str = f"{self.valid_dt_list[0]:%Y%m%d.%H}-{self.valid_dt_list[-1]:%Y%m%d.%H}"
+        self.num_valid_times = len(self.valid_dt_list)
 
+        print(f"Number of valid times: {self.num_valid_times}")
         print(f"Annual time period: {self.annual_time_period_str}")
         print(f"Monthly time period: {self.monthly_time_period_str}")
         print(f"Daily time period: {self.daily_time_period_str}")
@@ -798,8 +798,10 @@ class PrecipVerificationProcessor(object):
 
         if is_pctl_threshold:
             threshold_units = "th_pctl"
+            fss_data_dim_name = "pctl_threshold"
         else:
             threshold_units = "mm"
+            fss_data_dim_name = "threshold"
 
         if (eval_type == evaluate_by_radius_kw_str):
             print(f"**** Calculating FSS by radius (fixed threshold {fixed_threshold}{threshold_units})")
@@ -810,7 +812,7 @@ class PrecipVerificationProcessor(object):
             fss_data_coords = self.fss_eval_radius_da 
 
             fss_data_dim_name = "radius"
-            stat_type = f"fss.by_radius.thresh{self.fixed_fss_eval_threshold:0.1f}{threshold_units}"
+            stat_type = f"fss.by_{fss_data_dim_name}.thresh{self.fixed_fss_eval_threshold:0.1f}{threshold_units}"
         elif (eval_type == evaluate_by_radius_ari_threshold_kw_str):
             print(f"**** Calculating FSS by radius, using {fixed_ari_threshold:02d}-year ARI grid as threshold")
             self.fixed_fss_eval_threshold = fixed_ari_threshold
@@ -820,7 +822,7 @@ class PrecipVerificationProcessor(object):
             fss_data_coords = self.fss_eval_radius_da 
             
             fss_data_dim_name = "radius"
-            stat_type = f"fss.by_radius.thresh{self.fixed_fss_eval_threshold:02d}_year_ari"
+            stat_type = f"fss.by_{fss_data_dim_name}.thresh{self.fixed_fss_eval_threshold:02d}_year_ari"
 
             self.fixed_ari_grid = self._open_ari_threshold_grid(self.fixed_fss_eval_threshold)
         elif (eval_type == evaluate_by_ari_kw_str):
@@ -831,8 +833,8 @@ class PrecipVerificationProcessor(object):
             pdp.add_attributes_to_data_array(self.fss_eval_ari_da, units = "years")
             fss_data_coords = self.fss_eval_ari_da
 
-            fss_data_dim_name = "ARI"
-            stat_type = f"fss.by_ari_threshold.radius{self.fixed_fss_eval_radius:0.1f}{self.fss_eval_radius_units}"
+            fss_data_dim_name = "ARI_threshold"
+            stat_type = f"fss.by_{fss_data_dim_name}.radius{self.fixed_fss_eval_radius:0.1f}{self.fss_eval_radius_units}"
 
             # Read in ARI grids that will be used as thresholds for FSS calculations
             self.ari_grid_dict = {}
@@ -846,8 +848,7 @@ class PrecipVerificationProcessor(object):
             pdp.add_attributes_to_data_array(self.fss_eval_threshold_da, units = threshold_units)
             fss_data_coords = self.fss_eval_threshold_da 
 
-            fss_data_dim_name = "threshold"
-            stat_type = f"fss.by_threshold.radius{self.fixed_fss_eval_radius:0.1f}{self.fss_eval_radius_units}"
+            stat_type = f"fss.by_{fss_data_dim_name}.radius{self.fixed_fss_eval_radius:0.1f}{self.fss_eval_radius_units}"
 
         da_dict_fss = {}
         da_dict_f_model = {}
@@ -1635,7 +1636,7 @@ class PrecipVerificationProcessor(object):
     # with the proper time dimensions, as this method will make a plot for each coordinate of the time dimension.
     def plot_cmap_multi_panel(self, data_dict = None, plot_levels = np.arange(0, 85, 5),
                               time_period_type = None, stat_type = "mean", pctl = 99,
-                              single_colorbar = True, single_set_of_levels = True, cmap = pputils.DEFAULT_PRECIP_CMAP, 
+                              single_colorbar = True, single_set_of_levels = True, plot_cmap = pputils.DEFAULT_PRECIP_CMAP, 
                               plot_errors = False, write_to_nc = False):
         if (data_dict is None):
             if self.LOAD_DATA_FLAG: 
@@ -1704,7 +1705,7 @@ class PrecipVerificationProcessor(object):
                     data_to_plot = da.loc[loc_str]
                     plot_levels = levels
                     subplot_title = data_name
-                    cmap = cmap 
+                    cmap = plot_cmap 
                     extend_kwarg = "both" # TODO: Get max to work (currently skews the colorbar off-center)
 
                 # One colorbar for entire figure; add as its own separate axis defined using subplot2grid 
