@@ -37,9 +37,9 @@ poster=""
 for region in $regions_list
 do
 echo "******** $region"
-cmd="verify_precip.py $date_range_str $include_hrrr $cmaps $fss $pdfs $timeseries $plot $write_to_nc $poster --region $region >& ~/std_out/verify_precip.${region}.out"
+cmd="verify_precip.py $date_range_str $include_hrrr $cmaps $fss $pdfs $timeseries $plot $write_to_nc $poster --region $region"
 echo $cmd
 if [ $TESTING == false ]; then
-  $cmd
+  $cmd >& ~/std_out/verify_precip.${region}.out
 fi
 done
