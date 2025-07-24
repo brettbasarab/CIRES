@@ -74,9 +74,11 @@ def map_region_to_data_names(region, verif_grid = utils.Replay_data_name, includ
 
 class PrecipVerificationProcessor(object):
     def __init__(self, start_dt_str, end_dt_str,
-                 LOAD_DATA_FLAG = True, # Set to load data directly that we'll need, overrides external_da_dict
-                 IS_STANDARD_INPUT_DICT = True, # Set to assume that external_da_dict is a dictionary of the form {data_name_1: da_1, ...,data_name_N: da_N}  
-                 external_da_dict = None, # Dictionary of precalculated data arrays for which to make plots (only used if LOAD_DATA_FLAG = False)
+                 LOAD_DATA = True, # If True, load data from repository of netCDF files (otherwise use existing non-region-subsetted arrays)
+                 loaded_non_subset_da_dict = None, # Dictionary of loaded but non-region-subsetted DataArrays
+                 USE_EXTERNAL_DA_DICT = False, # If True, use data from an external DataArray dictionary load data directly that we'll need
+                 IS_STANDARD_INPUT_DICT = True, # If True, assumes that external_da_dict is a dictionary of the form {data_name_1: da_1, ...,data_name_N: da_N}  
+                 external_da_dict = None, # Dictionary of precalculated data arrays for which to make plots (only used if USE_EXTERNAL_DA_DICT = True)
                  data_names = ["AORC", "IMERG", "Replay", "ERA5"],
                  truth_data_name = "AORC", # Dataset that is considered truth (i.e., observations) for this particular verification
                  data_grid = "Replay", # Dataset whose grid we're performing verification on
@@ -89,6 +91,12 @@ class PrecipVerificationProcessor(object):
                  user_dir = "bbasarab",
                  poster = False): 
 
+        self.LOAD_DATA = LOAD_DATA
+        if not(self.LOAD_DATA):
+            print("Non-region subsetted DataArrays already loaded")
+            self.loaded_non_subset_da_dict = loaded_non_subset_da_dict
+        else:
+            print("Non-region subsetted DataArrays NOT already loaded; will load data accordingly")
         self.data_grid = data_grid
         self.data_grid_name = pdp.set_grid_name_for_file_names(self.data_grid)
         self.native_grid_name = pdp.set_grid_name_for_file_names("Native")
@@ -127,6 +135,8 @@ class PrecipVerificationProcessor(object):
         # Create lists of valid datetimes at the desired temporal resolution and at a daily cadence
         self.start_dt_str = start_dt_str
         self.end_dt_str = end_dt_str
+        print(f"******* Instance of PrecipVerificationProcessorClass *******")
+        print(f"Region: {self.region}")
         print(f"Start datetime: {self.start_dt_str}")
         print(f"End datetime: {self.end_dt_str}")
         print(f"Temporal resolution (hours): {self.temporal_res}")
@@ -142,17 +152,17 @@ class PrecipVerificationProcessor(object):
         print(f"Data name list: {self.data_names}")
         print(f"Truth data name: {self.truth_data_name}")
 
-        self.LOAD_DATA_FLAG = LOAD_DATA_FLAG
+        self.USE_EXTERNAL_DA_DICT = USE_EXTERNAL_DA_DICT
         self.IS_STANDARD_INPUT_DICT = IS_STANDARD_INPUT_DICT
-        if self.LOAD_DATA_FLAG:
+        if not(self.USE_EXTERNAL_DA_DICT):
             # Read model and obs data, check that the data array shapes match, then load the data
             self._read_region_subset_and_load_data()
             self._sum_data_over_full_time_period()
             self.truth_da_summed_time = self.da_dict_summed_time[self.truth_data_name]
         else:
-            print("**** LOAD_DATA_FLAG not set; will perform any verification using external data arrays provided")
+            print("**** USE_EXTERNAL_DA_DICT set; will perform any verification using external data arrays provided")
             if (external_da_dict is None):
-                print("Error: LOAD_DATA_FLAG not set but no external data arrays provided; can't perform verification")
+                print("Error: USE_EXTERNAL_DA_DICT set but no external data arrays provided; can't perform verification")
                 sys.exit(1)
             else:
                 if self.IS_STANDARD_INPUT_DICT:
@@ -273,38 +283,44 @@ class PrecipVerificationProcessor(object):
         return data_array 
 
     def _read_region_subset_and_load_data(self):
-        self.da_dict = {}
-        for data_name in self.data_names:
-            print(f"**** Reading dataset {data_name}")
-            dataset_dir, temporal_res_str = self._construct_path_to_nc_precip_data(data_name)
+        self.da_dict = {} # DataArray dictionary containing region-subsetted data
+        if self.LOAD_DATA:
+            self.loaded_non_subset_da_dict = {} # DataArray dictionary containing data as it was read in (not region-subsetted)
+            for data_name in self.data_names:
+                print(f"**** Reading dataset {data_name}")
+                dataset_dir, temporal_res_str = self._construct_path_to_nc_precip_data(data_name)
 
-            # Collect netCDF file list
-            file_list = []
-            for dtime in self.valid_daily_dt_list:
-                if (data_name == self.data_grid):
-                    fname = f"{data_name}.{self.native_grid_name}.{temporal_res_str}.{dtime:%Y%m%d}.nc"
-                else:
-                    fname = f"{data_name}.{self.data_grid_name}.{temporal_res_str}.{dtime:%Y%m%d}.nc"
-                fpath = os.path.join(dataset_dir, fname)
-                if (not os.path.exists(fpath)):
-                    print(f"Warning: Input file path {fpath} does not exist; not including in input file list")
-                    continue
-                file_list.append(fpath)
+                # Collect netCDF file list
+                file_list = []
+                for dtime in self.valid_daily_dt_list:
+                    if (data_name == self.data_grid):
+                        fname = f"{data_name}.{self.native_grid_name}.{temporal_res_str}.{dtime:%Y%m%d}.nc"
+                    else:
+                        fname = f"{data_name}.{self.data_grid_name}.{temporal_res_str}.{dtime:%Y%m%d}.nc"
+                    fpath = os.path.join(dataset_dir, fname)
+                    if (not os.path.exists(fpath)):
+                        print(f"Warning: Input file path {fpath} does not exist; not including in input file list")
+                        continue
+                    file_list.append(fpath)
 
-            if (len(file_list) == 0):
-                print(f"Error: No input files found in directory {dataset_dir}; can't proceed with verification")
-                sys.exit(1)
+                if (len(file_list) == 0):
+                    print(f"Error: No input files found in directory {dataset_dir}; can't proceed with verification")
+                    sys.exit(1)
 
-            # Read multi-file dataset
-            dataset = xr.open_mfdataset(file_list)
-            precip_da = dataset[f"precipitation_{self.temporal_res}_hour"]
-            precip_da.attrs["data_name"] = data_name
+                # Read multi-file dataset
+                dataset = xr.open_mfdataset(file_list)
+                precip_da = dataset[f"precipitation_{self.temporal_res}_hour"]
+                precip_da.attrs["data_name"] = data_name
 
-            # Index obs data array to correct datetime range
-            precip_da = precip_da.loc[self.start_dt.strftime(utils.full_date_format_str):self.end_dt.strftime(utils.full_date_format_str)]
+                # Index obs data array to correct datetime range
+                precip_da = precip_da.loc[self.start_dt.strftime(utils.full_date_format_str):self.end_dt.strftime(utils.full_date_format_str)]
 
-            # Subset data to region
-            self.da_dict[data_name] = self._subset_data_to_region(precip_da, data_name = data_name)
+                # Retain copies of non-region-subsetted data arrays (in case we want to subsequently subset to other regions)
+                self.loaded_non_subset_da_dict[data_name] = precip_da
+
+        # Subset data to region
+        for data_name, precip_da in self.loaded_non_subset_da_dict.items():
+            self.da_dict[data_name] = self._subset_data_to_region(precip_da.copy(), data_name = data_name)
 
         # Ensure the shapes of all the data arrays are the same. 
         print("**** Checking consistency of DataArray shapes")    
@@ -1639,7 +1655,7 @@ class PrecipVerificationProcessor(object):
                               single_colorbar = True, single_set_of_levels = True, plot_cmap = pputils.DEFAULT_PRECIP_CMAP, 
                               plot_errors = False, write_to_nc = False):
         if (data_dict is None):
-            if self.LOAD_DATA_FLAG: 
+            if not(self.USE_EXTERNAL_DA_DICT): 
                 data_dict = self.calculate_aggregated_stats(time_period_type = time_period_type, 
                                                             stat_type = stat_type,
                                                             agg_type = "time",
@@ -1764,7 +1780,7 @@ class PrecipVerificationProcessor(object):
     def plot_timeseries(self, data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, write_to_nc = False,
                         ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True):
         if (data_dict is None):
-            if self.LOAD_DATA_FLAG:
+            if not(self.USE_EXTERNAL_DA_DICT):
                 data_dict = self.calculate_aggregated_stats(time_period_type = time_period_type, 
                                                             stat_type = stat_type,
                                                             agg_type = "space_time",
@@ -1945,7 +1961,7 @@ class PrecipVerificationProcessor(object):
     # TODO: Consider plotting at midpoint of bin rather than left edge of bin
     def plot_pdf(self, data_dict = None, time_period_type = "full_period", write_to_nc = False):
         if (data_dict is None):
-            if self.LOAD_DATA_FLAG:
+            if not(self.USE_EXTERNAL_DA_DICT):
                 data_dict = self.calculate_pdf(time_period_type = time_period_type) 
             else:
                 data_dict = self.da_dict

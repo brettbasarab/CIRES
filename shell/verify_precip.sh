@@ -1,7 +1,5 @@
 #!/bin/bash
 
-source /home/bbasarab/shell/regions_list.sh
-
 # Set to 'true' to print verify_precip.py command below but not run it
 TESTING=false
 
@@ -18,11 +16,11 @@ pdfs="--pdfs"
 timeseries="--timeseries"
 
 # Set to '--include_hrrr' to run verification for shorter time period and include HRRR
-include_hrrr=""
-if [ -z $include_hrrr ]; then
-  date_range_str="20020101 20220101"
-else
+include_hrrr="--include_hrrr"
+if [ "$include_hrrr" = "--include_hrrr" ]; then
   date_range_str="20150101 20220101"
+else
+  date_range_str="20020101 20220101"
 fi
 
 # Set to '--plot' to make plots
@@ -34,12 +32,11 @@ write_to_nc="--write_to_nc"
 # Set to '--poster' for larger poster fonts on plots
 poster=""
 
-for region in $regions_list
-do
-echo "******** $region"
-cmd="verify_precip.py $date_range_str $include_hrrr $cmaps $fss $pdfs $timeseries $plot $write_to_nc $poster --region $region"
+# Set list of regions to verify
+regions_list=`regions_list.sh`
+
+cmd="verify_precip.py $date_range_str $include_hrrr $cmaps $fss $pdfs $timeseries $plot $write_to_nc $poster --regions $regions_list"
 echo $cmd
 if [ $TESTING == false ]; then
-  $cmd >& ~/std_out/verify_precip.${region}.out
+  $cmd >& ~/std_out/verify_precip.out
 fi
-done
