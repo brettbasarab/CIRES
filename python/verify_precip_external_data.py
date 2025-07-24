@@ -43,7 +43,7 @@ def main():
 
         verif = precip_verification_processor.PrecipVerificationProcessor(args.start_dt_str, 
                                                                           args.end_dt_str,
-                                                                          LOAD_DATA_FLAG = False, 
+                                                                          USE_EXTERNAL_DA_DICT = True, 
                                                                           external_da_dict = external_da_dict, 
                                                                           data_names = data_names, 
                                                                           truth_data_name = truth_data_name,

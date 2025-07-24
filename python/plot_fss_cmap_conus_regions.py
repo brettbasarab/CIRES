@@ -23,9 +23,9 @@ truth_data_name = "AORC"
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("start_dt_str",
-                        help = "Start date/time of verification; format YYYYmmdd.HH")
+                        help = "Start date/time of verification; format YYYYmmdd for 24-hourly data; otherwise YYYYmmdd.HH")
     parser.add_argument("end_dt_str",
-                        help = "End date/time of verification; format YYYYmmdd.HH")
+                        help = "End date/time of verification; format YYYYmmdd for 24-hourly data; otherwise YYYYmmdd.HH")
     parser.add_argument("--temporal_res", default = 24, type = int, choices = [1, 3, 24],
                         help = "Temporal resolution of precip data used in verification (default 24)")
     parser.add_argument("--time_period_type", default = "common_seasonal", choices = ["common_seasonal", "common_monthly"],
@@ -35,7 +35,7 @@ def main():
     parser.add_argument("--threshold", dest = "threshold", default = 10.0, type = float,
                         help = "FSS evaluation threshold (mm); default 10mm")
     parser.add_argument("--cmap", dest = "cmap", default = "RdYlGn", 
-                        help = "Color map for contour plots; default rainbow_r")
+                        help = "Color map for contour plots; default RdYlGn")
     args = parser.parse_args()
 
     regions_dict = {}
@@ -61,18 +61,19 @@ def main():
             # Gives a DataArray with dims 7302 (length of full 2002-2021 data)
             print(f"Reading {nc_fpath}")
             fss = xr.open_dataset(nc_fpath).fss
+            print(f"FSS array shape: {fss.shape}")
             fss_dict[data_name] = fss
            
         verif = precip_verification_processor.PrecipVerificationProcessor(args.start_dt_str,
                                                                           args.end_dt_str,
-                                                                          LOAD_DATA_FLAG = False, 
+                                                                          USE_EXTERNAL_DA_DICT = True, 
                                                                           IS_STANDARD_INPUT_DICT = False,
                                                                           external_da_dict = fss_dict, 
                                                                           data_names = data_names, 
                                                                           truth_data_name = truth_data_name,
                                                                           region = region,
                                                                           temporal_res = 24)
-        agg_fss_dict = verif.calculate_aggregated_fss(external_fss_dict = fss_dict, time_period_type = args.time_period_type, eval_type = "threshold")
+        agg_fss_dict, _, _ = verif.calculate_aggregated_fss(external_fss_dict = fss_dict, time_period_type = args.time_period_type, eval_type = "threshold")
         regions_dict[region] = agg_fss_dict
 
     template_da = read_template_data()
@@ -104,7 +105,7 @@ def main():
             lon1, lon2, lat1, lat2 = pputils.regions_info_dict["US-East"].region_extent
             fss_da.loc[{"lon": slice(lon1 + 360, lon2 + 360), "lat": slice(lat2, lat1)}] = fss_by_region_dict["US-East"]
 
-            # Mask to CONUS only (may no longer need this with initial setting to np.nan
+            # Mask to CONUS only (may no longer need this with initial setting to np.nan)
             fss_da = fss_da.where(conus_mask)
 
             # Expand dimensions to work better with plotting tools
@@ -143,7 +144,7 @@ def extract_values_to_plot(regions_dict, time_period, threshold):
             
     return data_names_dict
 
-# Create a template on the Replay grid populated with all ones 
+# Create a template on the Replay grid populated with all NaNs 
 def read_template_data(grid_name = "Replay"):
     fname = f"{grid_name}Grid.nc"
     fpath = os.path.join(utils.data_nc_dir, "TemplateGrids", fname)
@@ -161,7 +162,7 @@ def set_plot_levels_based_on_threshold(threshold):
         return np.arange(0.0, 0.32, 0.02)
 
 def plot_cmap_multi_panel_fss_by_region(data_dict, time_period, radius, threshold, eval_period_str, time_period_type = "common_seasonal",
-                                        master_region = "CONUS", temporal_res = 24, cmap = "rainbow_r", radius_units = "deg", region_ann_dict = None):
+                                        master_region = "CONUS", temporal_res = 24, cmap = "RdYlGn", radius_units = "deg", region_ann_dict = None):
     plot_info = pputils.regions_info_dict[master_region] # We're plotting the entire CONUS
 
     # Configure basic info about the data
