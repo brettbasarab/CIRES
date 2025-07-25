@@ -3,8 +3,8 @@
 # Set to 'true' to print verify_precip.py command below but not run it
 TESTING=false
 
-# Set to '--cmaps' to plot contour maps
-cmaps="--cmaps"
+# Set to '--cmaps [mean, pctls, all]' to plot contour maps
+cmaps="--cmaps all"
 
 # Set to '--fss --fss_pctl --fss_ari' to calculate FSS for various thresholds/radii
 fss="--fss --fss_pctl --fss_ari"

@@ -41,7 +41,7 @@ regions_info_dict = \
                 figsize_sp = (15, 10), 
                 figsize_2p = (15, 6), 
                 figsize_mp = (15, 10),
-                figsize_mp_5plus = (15, 7.5),
+                figsize_mp_5plus = (15, 7.75), # (15, 7.5)
                 cm_mean_precip_range = np.arange(0, 10.5, 0.5),
                 ts_mean_precip_range = np.arange(0, 4.5, 0.5),
                 central_point = [39.8, -98.6],
@@ -75,8 +75,8 @@ regions_info_dict = \
                 region_extent = [-120, -103, 28, 51],
                 figsize_sp = (10, 14),
                 figsize_2p = (9.5, 8), 
-                figsize_mp = (11, 14), # (10, 14) 
-                figsize_mp_5plus = (11, 14), # (10, 14)
+                figsize_mp = (11, 13), # (11, 14) 
+                figsize_mp_5plus = (11, 13), # (11, 14)
                 cm_mean_precip_range = np.arange(0, 6.5, 0.5), 
                 ts_mean_precip_range = np.arange(0, 3.0, 0.5),
                 central_point = [39.1, -111.8],
@@ -608,13 +608,13 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
         case 5:
             if single_colorbar:
                 axes_list = [
-                            plt.subplot2grid((9, 6), (0, 0), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 6), (0, 2), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 6), (0, 4), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 6), (4, 1), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 6), (4, 3), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((11, 6), (0, 0), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 6), (0, 2), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 6), (0, 4), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 6), (5, 1), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 6), (5, 3), colspan = 2, rowspan = 5, projection = proj),
                             ]
-                cbar_ax = plt.subplot2grid((9, 6), (8, 1), colspan = 4, rowspan = 1)
+                cbar_ax = plt.subplot2grid((11, 6), (10, 1), colspan = 4, rowspan = 1)
             else:
                 axes_list = [
                             plt.subplot2grid((8, 6), (0, 0), colspan = 2, rowspan = 4, projection = proj),
@@ -626,14 +626,14 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
         case 6:
             if single_colorbar:
                 axes_list = [
-                            plt.subplot2grid((9, 6), (0, 0), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 6), (0, 2), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 6), (0, 4), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 6), (4, 0), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 6), (4, 2), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 6), (4, 4), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((11, 6), (0, 0), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 6), (0, 2), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 6), (0, 4), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 6), (5, 0), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 6), (5, 2), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 6), (5, 4), colspan = 2, rowspan = 5, projection = proj),
                             ]
-                cbar_ax = plt.subplot2grid((9, 6), (8, 1), colspan = 4, rowspan = 1)
+                cbar_ax = plt.subplot2grid((11, 6), (10, 1), colspan = 4, rowspan = 1)
             else:
                 axes_list = [
                             plt.subplot2grid((8, 6), (0, 0), colspan = 2, rowspan = 4, projection = proj),
@@ -644,7 +644,7 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
                             plt.subplot2grid((8, 6), (4, 4), colspan = 2, rowspan = 4, projection = proj),
                             ]
         case _:
-            print("Error: Can't handle {num_da}-paneled subplot")
+            print("Error: create_gridded_subplots not currently configured to handle {num_da}-paneled subplot")
             return
 
     return axes_list, cbar_ax

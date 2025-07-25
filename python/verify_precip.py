@@ -39,8 +39,8 @@ def main():
     parser.add_argument("--include_hrrr", dest = "include_hrrr", action = "store_true", default = False,
                         help = "Set to include HRRR in verification")
     # Statistics flags: set which statistic(s) to calculated
-    parser.add_argument("--cmaps", dest = "cmaps", action = "store_true", default = False,
-                        help = "Set to plot contour maps (cmaps) of mean and percentiles of gridded data aggregated over various time periods")
+    parser.add_argument("--cmaps", dest = "cmaps", default = None, choices = [None, "mean", "pctls", "all"],
+                        help = "Set to plot contour maps (cmaps) of mean and/or percentiles of gridded data aggregated over various time periods")
     parser.add_argument("--fss", dest = "fss", action = "store_true", default = False,
                         help = "Calculate fractions skill score (FSS) using amount thresholds")
     parser.add_argument("--fss_pctl", dest = "fss_pctl", action = "store_true", default = False,
@@ -104,9 +104,9 @@ def main():
 
         # Calculate data for and plot contour maps of specified statistics valid at each grid point (so
         # contour maps can be made of the resulting data) and across various aggregation time periods.
-        if args.cmaps:
+        if (args.cmaps == "mean") or (args.cmaps == "all"):
             for time_period_type in args.time_period_types: 
-                print(f"**** Calculating {time_period_type} aggregated data for contour maps")
+                print(f"**** Calculating {time_period_type} mean data for contour maps")
                 # Mean
                 agg_dict = verif.calculate_aggregated_stats(time_period_type = time_period_type, stat_type = "mean", agg_type = "time", write_to_nc = args.write_to_nc)
                 if args.plot:
@@ -114,6 +114,9 @@ def main():
                     verif.plot_cmap_multi_panel(data_dict = agg_dict, single_colorbar = True, single_set_of_levels = True, plot_errors = False, plot_levels = precip_range)
                     verif.plot_cmap_multi_panel(data_dict = agg_dict, single_colorbar = False, single_set_of_levels = True, plot_errors = True, plot_levels = precip_range)
 
+        if (args.cmaps == "pctls") or (args.cmaps == "all"):
+            for time_period_type in args.time_period_types:
+                print(f"**** Calculating {time_period_type} percentile data for contour maps")
                 # 95th percentile
                 agg_dict = verif.calculate_aggregated_stats(time_period_type = time_period_type, stat_type = "pctl", agg_type = "time", pctl = 95, write_to_nc = args.write_to_nc)
                 if args.plot:
