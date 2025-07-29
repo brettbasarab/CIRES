@@ -237,6 +237,13 @@ def convert_from_dask_array(dask_array):
 
     return da
 
+# Common renaming of latitude/longitude dimensions to the lat/lon names that I use
+def rename_dims(data_array):
+    return data_array.rename({
+                             "latitude": "lat",
+                             "longitude": "lon",
+                             }) 
+
 # COMMAND MANAGEMENT
 #################################################################################
 # Communicate command output using subprocess

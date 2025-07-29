@@ -43,7 +43,7 @@ def main():
     # Native
     fpath_str = os.path.join(main_dir, f"AORC*NativeGrid*{args.dt_str}*.nc")
     print(f"Reading {fpath_str}")
-    precip_native = rename_dims(utils.convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip))
+    precip_native = utils.rename_dims(utils.convert_from_dask_array(xr.open_mfdataset(fpath_str).accum_precip))
     precip_native.attrs["grid_size"] = utils.aorc_grid_cell_size
 
     # Bilinear
@@ -183,12 +183,6 @@ def run_cdo_interpolation(interp_type, dtime, input_fpath, temporal_res = 24, do
 
     return output_fpath
 
-def rename_dims(data_array):
-    return data_array.rename({
-                             "latitude": "lat",
-                             "longitude": "lon",
-                             }) 
-
 if __name__ == "__main__":
     data_dict = main() 
 
@@ -219,7 +213,7 @@ if (args.temporal_res == 1):
                                       do_interp = args.interp, temporal_res = args.temporal_res) 
 
     # Read netCDFs containing hourly precip data
-    precip_native = rename_dims(xr.open_dataset(fpath_native).prate)
+    precip_native = utils.rename_dims(xr.open_dataset(fpath_native).prate)
     precip_bil = xr.open_dataset(fpath_bil).prate
     precip_con = xr.open_dataset(fpath_con).prate
     precip_nbr = xr.open_dataset(fpath_nbr).prate
@@ -262,7 +256,7 @@ elif (args.temporal_res == 24):
     print(f"Writing 24-hour precip at native resolution to {fpath_native24}")
     accum_precip24.period_end_time.encoding["units"] = utils.seconds_since_unix_epoch_str
     accum_precip24.to_netcdf(fpath_native24)
-    accum_precip24 = rename_dims(accum_precip24)
+    accum_precip24 = utils.rename_dims(accum_precip24)
 
     ##### Interpolate 24-hour precip to Replay grid
     # Bilinear
