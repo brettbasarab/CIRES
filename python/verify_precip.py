@@ -80,12 +80,12 @@ def main():
 
         # Determine data names to use for this particular type of verification 
         if (type(args.data_names_list) is list) and (len(args.data_names_list) >= 1):
-            data_names, truth_data_name, data_grid = args.data_names_list, args.data_names_list[0]
+            data_names, truth_data_name = args.data_names_list, args.data_names_list[0]
+            _, _, data_grid = precip_verification_processor.map_region_to_data_names(region)
         else:
             data_names, truth_data_name, data_grid = precip_verification_processor.map_region_to_data_names(region,
                                                                                                             verif_grid = args.verif_grid,
                                                                                                             include_hrrr = args.include_hrrr)
-
 
         # Set up verification by instantiating the PrecipVerificationProcessor class
         verif = precip_verification_processor.PrecipVerificationProcessor(args.start_dt_str, 
