@@ -1563,7 +1563,7 @@ class PrecipVerificationProcessor(object):
                 for data_name, da in plot_dict.items():
                     if (data_name == self.truth_data_name):
                         continue
-                    axis.plot(xaxis_var, da, linewidth = 2, label = data_name,
+                    axis.plot(xaxis_var, da, linewidth = 2.5, label = data_name,
                              color = pputils.time_series_color_dict[data_name])
                 if (include_fss_uniform) and (subplot_title == "FSS") and \
                 ((eval_type == evaluate_by_radius_kw_str) or (eval_type == evaluate_by_radius_ari_threshold_kw_str)):
@@ -1628,7 +1628,7 @@ class PrecipVerificationProcessor(object):
                 da = self.fss_dict_by_radius[data_name].loc[:, eval_radius]
             else: 
                 da = self.fss_dict_by_threshold[data_name].loc[:, eval_threshold]
-            plt.plot(da.period_end_time.values, da, color = pputils.time_series_color_dict[data_name], linewidth = 2, label = data_name)  
+            plt.plot(da.period_end_time.values, da, color = pputils.time_series_color_dict[data_name], linewidth = 2.5, label = data_name)  
 
         # Save figure
         plt.tight_layout()
@@ -1848,7 +1848,7 @@ class PrecipVerificationProcessor(object):
         fig = plt.figure(figsize = (15, 10))
         for data_name, data_array in data_dict.items():
             color = pputils.time_series_color_dict[data_name]
-            data_array.plot(label = data_name, color = color, linewidth = 3, linestyle = "solid")
+            data_array.plot(label = data_name, color = color, linewidth = 2.5, linestyle = "solid")
         plt.legend(loc = "upper right", prop = {"size": 15 + self.poster_font_increase})
 
         # Configure the plot
@@ -1997,7 +1997,7 @@ class PrecipVerificationProcessor(object):
             # Initialize figure and plot data 
             plt.figure(figsize = (10,10))
             for data_name, (pdf_values, pdf_bins, total_samples) in da_dict_this_dtime.items():
-                plt.plot(pdf_bins[:-1], pdf_values, label = data_name, color = pputils.time_series_color_dict[data_name], linewidth = 2)
+                plt.plot(pdf_bins[:-1], pdf_values, label = data_name, color = pputils.time_series_color_dict[data_name], linewidth = 2.5)
             plt.gca().set_yscale("log")
             plt.grid(True, linewidth = 0.5)
             plt.legend(loc = "upper right", prop = {"size": 15})
