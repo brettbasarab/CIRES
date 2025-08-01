@@ -621,11 +621,17 @@ class PrecipVerificationProcessor(object):
         number_of_correct_negatives = len(np.where(correct_negatives_condition.values.flatten())[0])
         return number_of_correct_negatives
 
+    def how_to_plot_aggregated_stats(self):
+        print("NOTE: If input_da_dict is None, self.da_dict will be used.")
+        print('calculate_aggregated_stats(input_da_dict = None,\n'
+              'time_period_type = None, agg_type = "space_time", stat_type = "mean",\n'
+              'pctl = 99, write_to_nc = False)')
+
     # Calculate statistics valid for data aggregated in space, time, or space and time. Currently
     # only mean and percentile stats are supported. 
     def calculate_aggregated_stats(self,
                                    input_da_dict = None,
-                                   time_period_type = "monthly",
+                                   time_period_type = None, 
                                    agg_type = "space_time",         
                                    stat_type = "mean",
                                    pctl = 99,
@@ -700,9 +706,9 @@ class PrecipVerificationProcessor(object):
             else:
                 agg_da.coords[dim_name] = dtimes 
             pdp.add_attributes_to_data_array(agg_da,
-                                               short_name = short_name, 
-                                               long_name = long_name, 
-                                               units = da.units)
+                                             short_name = short_name, 
+                                             long_name = long_name, 
+                                             units = da.units)
             agg_data_dict[data_name] = agg_da 
 
             # Output to netCDF
@@ -1088,9 +1094,9 @@ class PrecipVerificationProcessor(object):
     # Based on time_period_type ('monthly', etc.), determine list of dtimes, dimension names, and time period string
     def _process_time_period_type_to_dtimes(self, time_period_type):
         match time_period_type:
-            case None: # Don't do any temporal aggregation
+            case None: # Use the time coordinates as they exist in the data arrays without any further temporal aggregation
                 dtimes = self.valid_dt_list
-                dim_name = utils.period_begin_time_dim_str
+                dim_name = utils.period_end_time_dim_str
                 time_period_str = self.daily_time_period_str
             case "daily":
                 dtimes = self.valid_daily_dt_list_period_begin # Need period beginning times for daily data
@@ -1774,11 +1780,11 @@ class PrecipVerificationProcessor(object):
     def how_to_plot_timeseries(self):
         print("NOTE: If data_dict is passed it will be used directly, without aggregation using time_period_type.\n"
               "So, the contents of data_dict must already be properly aggregated for a time series.")
-        print('plot_timeseries(data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, write_to_nc = False,\n'
-              '                ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True)')
+        print('plot_timeseries(data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, plot_levels = None, \n'
+                               'write_to_nc = False, ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True)')
 
-    def plot_timeseries(self, data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, write_to_nc = False,
-                        ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True):
+    def plot_timeseries(self, data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, plot_levels = None,
+                        write_to_nc = False, ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True):
         if (data_dict is None):
             if not(self.USE_EXTERNAL_DA_DICT):
                 data_dict = self.calculate_aggregated_stats(time_period_type = time_period_type, 
@@ -1791,19 +1797,22 @@ class PrecipVerificationProcessor(object):
 
         truth_da = data_dict[self.truth_data_name] 
         num_da = len(data_dict.items())
+        yticks = plot_levels
 
         match stat_type:
             case "pctl":
                 title_string = f"{pctl:0.1f}th {stat_type}, {self.region}"
                 fig_name_prefix = "{pctl:0.1f}th_pctl"
-                yticks = pputils.variable_pctl_plot_limits("accum_precip", self.temporal_res)
+                if (plot_levels is None):
+                    yticks = pputils.variable_pctl_plot_limits("accum_precip", self.temporal_res)
                 axis_label = pdp.format_short_name(truth_da)
             case "mean": 
                 title_string = f"{stat_type.title()}, {self.region}"
                 fig_name_prefix = "mean"
-                yticks = pputils.regions_info_dict[self.region].ts_mean_precip_range
-                if (time_period_type == None) or (time_period_type == "daily"):
-                    yticks = 2.0 * np.copy(yticks) 
+                if (plot_levels is None):
+                    yticks = pputils.regions_info_dict[self.region].ts_mean_precip_range
+                    if (time_period_type == None) or (time_period_type == "daily"):
+                        yticks = 2.0 * np.copy(yticks) 
                 axis_label = self._format_short_short_name(truth_da)
             case _:
                 raise NotImplementedError
