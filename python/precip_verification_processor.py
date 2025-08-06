@@ -678,7 +678,7 @@ class PrecipVerificationProcessor(object):
         for data_name, da in input_da_dict.items():
             # Convert data coordinates to period beginning (easier to aggregate over different time periods this way)
             if (time_period_type is not None):
-                data_array = self._convert_period_end_to_period_begin(da)
+                data_array = utils.convert_period_end_to_period_begin(da)
             else:
                 data_array = da
 
@@ -745,7 +745,7 @@ class PrecipVerificationProcessor(object):
             pdf_each_dtime_dict = {}
             for data_name, da in input_da_dict.items():
                 # Convert data coordinates to period beginning (much easier to aggregate over months that way)
-                data_array = self._convert_period_end_to_period_begin(da)
+                data_array = utils.convert_period_end_to_period_begin(da)
 
                 # Calculate pdf 
                 data_to_aggregate = self._determine_agg_data_from_time_period_type(data_array, time_period_type, dtime)
@@ -1035,7 +1035,7 @@ class PrecipVerificationProcessor(object):
                     continue
 
                 # Convert data coordinates to period beginning (much easier to aggregate over months that way)
-                data_array = self._convert_period_end_to_period_begin(data_array)
+                data_array = utils.convert_period_end_to_period_begin(data_array)
                 data_to_aggregate = self._determine_agg_data_from_time_period_type(data_array, time_period_type, dtime)
                 data = data_to_aggregate.mean(dim = utils.period_begin_time_dim_str)
 
@@ -1043,8 +1043,8 @@ class PrecipVerificationProcessor(object):
 
                 # Calculate AFSS and FSS_uniform (useful for plotting of by-radius aggregated FSS results)
                 if (eval_type == evaluate_by_radius_kw_str) or (eval_type == evaluate_by_radius_ari_threshold_kw_str):
-                    f_obs_da = self._convert_period_end_to_period_begin(self.f_obs_da)
-                    f_model_da = self._convert_period_end_to_period_begin(self.f_model_dict[data_name])
+                    f_obs_da = utils.convert_period_end_to_period_begin(self.f_obs_da)
+                    f_model_da = utils.convert_period_end_to_period_begin(self.f_model_dict[data_name])
                     
                     afss_da = (2 * f_obs_da * f_model_da)/(f_obs_da**2 + f_model_da**2)
                     fss_uniform_da = 0.5 * (1 + f_obs_da)
@@ -1080,7 +1080,7 @@ class PrecipVerificationProcessor(object):
             da_dict_each_dtime = {}
             for data_name, data_array in self.da_dict.items(): 
                 # Convert data coordinates to period beginning (much easier to aggregate over months that way)
-                data_array = self._convert_period_end_to_period_begin(data_array)
+                data_array = utils.convert_period_end_to_period_begin(data_array)
                 da_dict_each_dtime[data_name] = self._determine_agg_data_from_time_period_type(data_array, time_period_type, dtime)
                 
             all_occ_stats_dict = self.calculate_occ_stats(da_dict_each_dtime)
@@ -1138,21 +1138,6 @@ class PrecipVerificationProcessor(object):
         da.name = stat_name 
 
         return da
-
-    # Convert period-ending time dimension to period beginning; useful for certain statistics
-    # to ensure that a period such as January 31 (ending at 00z February 1) is included within January stats.
-    def _convert_period_end_to_period_begin(self, data_array):
-        #print("Converting time coordinates to period beginning")
-        period_end_times = [pd.Timestamp(i) for i in data_array.period_end_time.values]
-        period_begin_times = [i - pd.Timedelta(hours = self.temporal_res) for i in period_end_times]
-       
-        data_array_period_begin = data_array.rename({utils.period_end_time_dim_str: utils.period_begin_time_dim_str})
-        data_array_period_begin.coords[utils.period_begin_time_dim_str] = period_begin_times 
-
-        return data_array_period_begin
-
-    def _convert_period_begin_to_period_end(self, data_array):
-        pass 
 
     # Returns a list of date-time ranges corresponding to each season valid within
     # the time dimension of the input data array.
@@ -1265,7 +1250,7 @@ class PrecipVerificationProcessor(object):
         # Convert time coordinates to period beginning so that accumulated precip ending at, for example, 00z Feb 1
         # is interpreted as valid *during* January.
         if (utils.period_end_time_dim_str in data_array.dims): 
-            data_array = self._convert_period_end_to_period_begin(data_array)
+            data_array = utils.convert_period_end_to_period_begin(data_array)
 
         da_sel_time_period = data_array.sel(period_begin_time = data_array.period_begin_time.dt.month.isin(month_list))
         return da_sel_time_period
@@ -1802,7 +1787,7 @@ class PrecipVerificationProcessor(object):
         match stat_type:
             case "pctl":
                 title_string = f"{pctl:0.1f}th {stat_type}, {self.region}"
-                fig_name_prefix = "{pctl:0.1f}th_pctl"
+                fig_name_prefix = f"{pctl:0.1f}th_pctl"
                 if (plot_levels is None):
                     yticks = pputils.variable_pctl_plot_limits("accum_precip", self.temporal_res)
                 axis_label = pdp.format_short_name(truth_da)
@@ -1813,6 +1798,12 @@ class PrecipVerificationProcessor(object):
                     yticks = pputils.regions_info_dict[self.region].ts_mean_precip_range
                     if (time_period_type == None) or (time_period_type == "daily"):
                         yticks = 2.0 * np.copy(yticks) 
+                axis_label = self._format_short_short_name(truth_da)
+            case "pctl_excd_mean":
+                title_string = f"{pctl:0.1f}th pctl exceedance mean, {self.region}"
+                fig_name_prefix = f"{pctl:0.1f}th_{stat_type}"
+                if (plot_levels is None):
+                    yticks = pputils.variable_pctl_plot_limits("accum_precip", self.temporal_res)
                 axis_label = self._format_short_short_name(truth_da)
             case _:
                 raise NotImplementedError

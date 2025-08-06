@@ -79,6 +79,27 @@ IMERG_data_name = "IMERG"
 NestedReplay_data_name = "NestedReplay"
 Replay_data_name = "Replay"
 
+# Convert 'period_end_time' dimension name and associated coordinates to 'period_begin_time'
+# Useful for certain statistics to ensure that a period such as January 31 (ending at 00z February 1) is included within January stats.
+def convert_period_end_to_period_begin(data_array, temporal_res = 24):
+    period_end_times = [pd.Timestamp(i) for i in data_array.period_end_time.values]
+    period_begin_times = [i - pd.Timedelta(hours = temporal_res) for i in period_end_times]
+   
+    data_array_period_begin = data_array.rename({utils.period_end_time_dim_str: utils.period_begin_time_dim_str})
+    data_array_period_begin.coords[utils.period_begin_time_dim_str] = period_begin_times 
+
+    return data_array_period_begin
+
+# Convert 'period_begin_time' dimension name and associated coordinates to 'period_end_time'
+def convert_period_begin_to_period_end(data_array, temporal_res = 24):
+    period_begin_times = [pd.Timestamp(i) for i in data_array.period_begin_time.values]
+    period_end_times  = [i + pd.Timedelta(hours = temporal_res) for i in period_begin_times]
+
+    data_array_period_end = data_array.rename({utils.period_begin_time_dim_str: utils.period_end_time_dim_str})
+    data_array_period_end.coords[utils.period_end_time_dim_str] = period_end_times
+
+    return data_array_period_end
+
 # DATA DIRECTORY PATHS 
 #################################################################################
 # PSL Linux machines directories 
