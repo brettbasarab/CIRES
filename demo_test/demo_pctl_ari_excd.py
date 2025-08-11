@@ -4,6 +4,7 @@ import argparse
 import datetime as dt
 import numpy as np
 import pandas as pd
+import precip_plotting_utilities as pputils
 import precip_verification_processor
 import sys
 import utilities as utils
@@ -16,97 +17,157 @@ import xarray as xr
 
 utils.suppress_warnings()
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument("start_dt_str",
                     help = "Start date/time string")
 parser.add_argument("end_dt_str",
                     help = "End date/time string")
+parser.add_argument("--regions", dest = "regions", nargs = "+", default = ["CONUS"],
+                    help = "Regions for which to perform verification; default CONUS")
 parser.add_argument("--pctl", dest = "pctl", type = float, default = 99,
-                    help = "Percentile to use for exceedances; default  99th")
+                    help = "Percentile to use for exceedances; default 99th")
 parser.add_argument("--time_period_type", dest = "time_period_type", default = "monthly",
-                    help = "Time period type: monthly, seasonal, etc.")
-parser.add_argument("--excd_type", dest = "excd_type", default = "at_obs_excd", choices = ["at_obs_excd", "at_own_excd"],
-                    help = "Type of exceedances for which to calculate means (default at_obs_excd)")
+                    help = "Time period type: monthly, seasonal, etc.; default  monthly")
+parser.add_argument("--exclude_zeros", dest = "exclude_zeros", action = "store_true", default = False,
+                    help = "Set to True to exclude zeros from percentile calculations; default False")
+parser.add_argument("--excd_type", dest = "excd_type", default = "mdl_excd_obs_pctl",
+                    choices = ["obs_excd_obs_pctl", "mdl_excd_obs_pctl", "mdl_excd_mdl_pctl"],
+                    help = "Type of exceedances for which to calculate means (default mdl_excd_obs_pctl); \n"
+                           "obs_excd_obs_pctl: Model values where obs exceedances of obs_pctl occur;\n"
+                           "mdl_excd_obs_pctl: Model's own exceedances of obs_pctl;\n"
+                           "mdl_excd_mdl_pctl: Model's own exceedances of its own pctl;\n"
+                           "default mdl_excd_obs_pctl")
 args = parser.parse_args()
 
-# Instantiate PrecipVerificationProcessor class
-verif = precip_verification_processor.PrecipVerificationProcessor(args.start_dt_str,
-                                                                  args.end_dt_str, 
-                                                                  LOAD_DATA = True,
-                                                                  data_names = ["AORC", "CONUS404", "ERA5", "HRRR", "IMERG", "Replay"],
-                                                                  truth_data_name = "AORC",
-                                                                  data_grid = "Replay",
-                                                                  temporal_res = 24,
-                                                                  region = "US-East")
+for r, region in enumerate(args.regions):
+    LOAD_DATA = True
+    loaded_non_subset_da_dict = None 
+    if (r > 0):
+        LOAD_DATA = False
+        loaded_non_subset_da_dict = verif.loaded_non_subset_da_dict # From previous instantiation of PrecipVerificationProcessor
 
-# (Not using for now)
-# Over a longer time period, if you use common_monthly or common_seasonal
-# to calculate percentiles, the percentiles represent something close to a climatology (?)
-# as opposed to the percentiles specific to a particular month or season.
-if args.time_period_type == "monthly":
-    pctl_agg_type = "common_monthly"
-elif args.time_period_type == "seasonal":
-    pctl_agg_type = "common_seasonal"
+    # Instantiate PrecipVerificationProcessor class
+    verif = precip_verification_processor.PrecipVerificationProcessor(args.start_dt_str,
+                                                                      args.end_dt_str, 
+                                                                      LOAD_DATA = LOAD_DATA,
+                                                                      loaded_non_subset_da_dict = loaded_non_subset_da_dict,
+                                                                      data_names = ["AORC", "CONUS404", "ERA5", "HRRR", "IMERG", "Replay"],
+                                                                      truth_data_name = "AORC",
+                                                                      data_grid = "Replay",
+                                                                      temporal_res = 24,
+                                                                      region = region) 
 
-# Calculate 99th percentiles
-agg_dict = verif.calculate_aggregated_stats(time_period_type = args.time_period_type, stat_type = "pctl", agg_type = "time", pctl = 99)
+    # (Not using for now)
+    # Over a longer time period, if you use common_monthly or common_seasonal
+    # to calculate percentiles, the percentiles represent something close to a climatology (?)
+    # as opposed to the percentiles specific to a particular month or season.
+    if args.time_period_type == "monthly":
+        pctl_agg_type = "common_monthly"
+    elif args.time_period_type == "seasonal":
+        pctl_agg_type = "common_seasonal"
 
-# Plot percentiles for each time period 
-#verif.plot_cmap_multi_panel(data_dict = agg_dict)
+    # Calculate 99th percentiles
+    #agg_dict = verif.calculate_aggregated_stats(time_period_type = args.time_period_type, stat_type = "pctl", agg_type = "time", pctl = 99)
 
-# Get observed 99th percentiles (AORC)
-obs_pctl = agg_dict[verif.truth_data_name]
+    # Plot percentiles for each time period 
+    #verif.plot_cmap_multi_panel(data_dict = agg_dict)
 
-# Get observed data grid (AORC)
-obs_da = verif.truth_da 
-obs_da_period_begin = utils.convert_period_end_to_period_begin(obs_da)
+    # Get observed 99th percentiles (AORC)
+    #obs_pctl = agg_dict[verif.truth_data_name]
 
-# Get points of all grids where observed percentile exceedances occur
-print("Calculating exceedances")
-dtimes, dim_name, time_period_str = verif._process_time_period_type_to_dtimes(args.time_period_type)
-if (args.time_period_type == "seasonal"):
-    dtimes = verif._construct_season_dt_ranges(obs_da)
+    # Get observed data grid (AORC)
+    obs_da = verif.truth_da 
+    obs_da_period_begin = utils.convert_period_end_to_period_begin(obs_da)
 
-excd_dict = {} 
-for data_name, da in verif.da_dict.items():
-    data_array = utils.convert_period_end_to_period_begin(da)
-    final_da_list = []
-    for dtime in dtimes:
-        obs_pctl_sel_time_period = verif._determine_agg_data_from_time_period_type(obs_da_period_begin,
-                                                                                   args.time_period_type,
-                                                                                   dtime).quantile(args.pctl/100,
-                                                                                                   dim = utils.period_begin_time_dim_str)
-        obs_da_sel_time_period = verif._determine_agg_data_from_time_period_type(obs_da_period_begin,
+    # Get points of all grids where observed percentile exceedances occur
+    print("Calculating exceedances")
+    dtimes, dim_name, time_period_str = verif._process_time_period_type_to_dtimes(args.time_period_type)
+    if (args.time_period_type == "seasonal"):
+        dtimes = verif._construct_season_dt_ranges(obs_da)
+
+    excd_dict = {} 
+    for data_name, da in verif.da_dict.items():
+        data_array = utils.convert_period_end_to_period_begin(da)
+        final_da_list = []
+        for dtime in dtimes:
+            # Observed data
+            obs_da_sel_time_period = verif._determine_agg_data_from_time_period_type(obs_da_period_begin,
+                                                                                     args.time_period_type,
+                                                                                     dtime)
+
+            # Model data
+            da_sel_time_period = verif._determine_agg_data_from_time_period_type(data_array,
                                                                                  args.time_period_type,
-                                                                                 dtime) 
-        da_sel_time_period = verif._determine_agg_data_from_time_period_type(data_array,
-                                                                             args.time_period_type,
-                                                                             dtime)
+                                                                                 dtime)
 
-        # This DataArray's values where obs exceedances of obs_pctl occur for this time period 
-        if (args.excd_type == "at_obs_excd"):
-           excd_da = da_sel_time_period.where(obs_da_sel_time_period >= obs_pctl_sel_time_period)
-        # This DataArray's own exceedances of obs_pctl for this time period
-        else:
-           excd_da = da_sel_time_period.where(da_sel_time_period >= obs_pctl_sel_time_period) 
-        final_da_list.append(excd_da)
+            # Retain or exclude zeros in data arrays for percentile calculations
+            if args.exclude_zeros:
+                obs_da_for_pctls = obs_da_sel_time_period.where(obs_da_sel_time_period > 0.0)
+                model_da_for_pctls = da_sel_time_period.where(da_sel_time_period > 0.0)
+                exclude_zeros_str = ".exclude_zeros"
+            else:
+                obs_da_for_pctls = obs_da_sel_time_period
+                model_da_for_pctls = da_sel_time_period
+                exclude_zeros_str = ""
+ 
+            # Observed percentile
+            obs_pctl_sel_time_period = obs_da_for_pctls.quantile(args.pctl/100, keep_attrs = True,
+                                                                 dim = utils.period_begin_time_dim_str)
 
-    final_da = xr.concat(final_da_list, dim = "period_begin_time")
-    excd_dict[data_name] = utils.convert_period_begin_to_period_end(final_da)
+            # Model percentile
+            da_pctl_sel_time_period = model_da_for_pctls.quantile(args.pctl/100, keep_attrs = True,
+                                                                  dim = utils.period_begin_time_dim_str)
 
-# Aggregate exceedances dict to daily means and plot time series
-agg_excd_dict = verif.calculate_aggregated_stats(input_da_dict = excd_dict, 
-                                                 time_period_type = args.time_period_type,
-                                                 stat_type = "mean",
-                                                 agg_type = "space_time")
+            # Plotting            
+            if (data_name == "AORC"):
+                pputils.plot_cmap_single_panel(obs_pctl_sel_time_period, 
+                                               f"{data_name}.obs_pctl{exclude_zeros_str}",
+                                               f"{data_name}.obs_pctl{exclude_zeros_str}",
+                                               region,
+                                               plot_levels = np.arange(0, 62, 2))
+            else:
+                pputils.plot_cmap_single_panel(da_pctl_sel_time_period, 
+                                               f"{data_name}.da_pctl{exclude_zeros_str}",
+                                               f"{data_name}.da_pctl{exclude_zeros_str}",
+                                               region,
+                                               plot_levels = np.arange(0, 62, 2))
 
-verif.plot_timeseries(data_dict = agg_excd_dict,
-                      time_period_type = args.time_period_type,
-                      stat_type = "pctl_excd_mean",
-                      pctl = args.pctl, 
-                      plot_levels = np.arange(0, 85, 5),
-                      write_stats = False)
+            #print(f"**** {dtime}")
+            #print(f"{model_da_for_pctls.min().item()}, {model_da_for_pctls.mean().item():0.2f}")
+            #print(obs_da_sel_time_period.shape, obs_da_sel_time_period.min().item(), obs_da_sel_time_period.max().item(), obs_da_sel_time_period.mean().item())
+            #print(da_sel_time_period.shape, da_sel_time_period.min().item(), da_sel_time_period.max().item(), da_sel_time_period.mean().item())
+            #print(obs_pctl_sel_time_period.shape, obs_pctl_sel_time_period.min().item(), obs_pctl_sel_time_period.max().item(), obs_pctl_sel_time_period.mean().item())
+            #print(da_pctl_sel_time_period.shape, da_pctl_sel_time_period.min().item(), da_pctl_sel_time_period.max().item(), da_pctl_sel_time_period.mean().item())
+
+            # This DataArray's values where obs exceedances of obs_pctl occur for this time period 
+            if (args.excd_type == "obs_excd_obs_pctl"):
+                excd_da = da_sel_time_period.where(obs_da_sel_time_period >= obs_pctl_sel_time_period)
+            # This DataArray's own exceedances of obs_pctl for this time period
+            elif (args.excd_type == "mdl_excd_obs_pctl"):
+                excd_da = da_sel_time_period.where(da_sel_time_period >= obs_pctl_sel_time_period)
+            # This DataArray's own exceedances of its own pctl for this time period 
+            elif (args.excd_type == "mdl_excd_mdl_pctl"):
+                excd_da = da_sel_time_period.where(da_sel_time_period >= da_pctl_sel_time_period) 
+            else:
+                print(f"Error: Unknown model/obs percentile exceedance type {args.excd_type}")
+                sys.exit(1) 
+            final_da_list.append(excd_da)
+
+        final_da = xr.concat(final_da_list, dim = "period_begin_time")
+        excd_dict[data_name] = utils.convert_period_begin_to_period_end(final_da)
+
+    # Aggregate exceedances dict to daily means and plot time series
+    agg_excd_dict = verif.calculate_aggregated_stats(input_da_dict = excd_dict, 
+                                                     time_period_type = args.time_period_type,
+                                                     stat_type = "mean",
+                                                     agg_type = "space_time")
+
+    verif.plot_timeseries(data_dict = agg_excd_dict,
+                          time_period_type = args.time_period_type,
+                          stat_type = "pctl_excd_mean",
+                          pctl = args.pctl, 
+                          plot_levels = np.arange(0, 85, 5),
+                          write_stats = False)
 
 ##### OLD/SCRATCH #####
 """
