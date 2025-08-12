@@ -1421,7 +1421,7 @@ class PrecipVerificationProcessor(object):
     ##### Public methods plotting #####
     def plot_aggregated_fss(self, eval_type = evaluate_by_radius_kw_str, xaxis_explicit_values = False,
                             time_period_type = "full_period", include_frequency_bias = False, is_pctl_threshold = False,
-                            include_fss_uniform = True):
+                            include_fss_uniform = False):
         # Only plot frequency bias on second axis if the first axis is plotted against amount thresholds.
         if is_pctl_threshold or (eval_type != evaluate_by_threshold_kw_str):
             include_frequency_bias = False
