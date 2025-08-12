@@ -30,8 +30,8 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import planetary_computer
-import pystac_client
+#import planetary_computer
+#import pystac_client
 import sys
 import utilities as utils
 import xarray as xr

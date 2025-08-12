@@ -79,6 +79,9 @@ IMERG_data_name = "IMERG"
 NestedReplay_data_name = "NestedReplay"
 Replay_data_name = "Replay"
 
+dataset_list = [AORC_data_name, CONUS404_data_name, ERA5_data_name, HRRR_data_name,
+                IMERG_data_name, NestedReplay_data_name, Replay_data_name]
+
 # Convert 'period_end_time' dimension name and associated coordinates to 'period_begin_time'
 # Useful for certain statistics to ensure that a period such as January 31 (ending at 00z February 1) is included within January stats.
 def convert_period_end_to_period_begin(data_array, temporal_res = 24):
