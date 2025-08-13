@@ -624,7 +624,7 @@ class ImergDataProcessor(ReplayDataProcessor):
                        native_data_dir = "/Projects/BIL/Extreme_Intercomp/IMERG/Final",
                        native_data_version_string = "V07B",
                        native_data_temporal_res_hours = 0.5,
-                       MODEL_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
+                       MODEL_GRID_FLAG = False, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
                        model_temporal_res = 3,
                        model_name = "Replay",
                        interp_method = "linear",
@@ -981,7 +981,7 @@ class ERA5DataProcessor(ReplayDataProcessor):
                        native_data_dir = "/Projects/era5/monolevel/",
                        temporal_res = 3, # ERA5 is hourly, but the data availabale at PSL are 3-hourly
                        input_variable_list = ["prate"],
-                       MODEL_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
+                       MODEL_GRID_FLAG = False, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
                        model_temporal_res = 3,
                        model_name = "Replay",
                        interp_method = "linear",
@@ -1239,7 +1239,7 @@ class AorcDataProcessor(ReplayDataProcessor):
                        #native_data_dir = "/Projects/BIL/Extreme_Intercomp/AORC", # /Projects/BIL area with time offset
                        native_data_dir = "/Projects/AORC_CONUS_4km",
                        obs_temporal_res = 1, 
-                       MODEL_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
+                       MODEL_GRID_FLAG = False, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
                        model_temporal_res = 3,
                        model_name = "Replay",
                        interp_method = "linear",
@@ -1486,7 +1486,7 @@ class CONUS404DataProcessor(object):
                        data_name = "CONUS404",
                        input_variable_list = ["PREC_ACC_NC"],
                        native_temporal_res = 1, 
-                       DEST_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to a different destination grid 
+                       DEST_GRID_FLAG = False, # Flag set to True if we are reading in and interpolating to a different destination grid 
                        dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to different destination grid (NOT the same as model_temporal_res in other classes)
                        dest_grid_name = "Replay",
                        interp_method = "linear",
@@ -1773,7 +1773,7 @@ class NestedReplayDataProcessor(object):
                        data_name = "NestedReplay",
                        native_data_dir = os.path.join(utils.data_nc_dir, "NestedReplay.NativeGrid.01_hour_precipitation"),
                        native_temporal_res = 1, 
-                       DEST_GRID_FLAG = True, # Flag set to True if we are reading in and interpolating to a different destination grid 
+                       DEST_GRID_FLAG = False, # Flag set to True if we are reading in and interpolating to a different destination grid 
                        dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to different destination grid
                        dest_grid_name = "AORC",
                        interp_method = "linear",

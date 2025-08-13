@@ -18,12 +18,23 @@ regridders_dir = os.path.join(utils.data_nc_dir, "Regridders")
 native_grid_str = pdp.set_grid_name_for_file_names("native")
 
 def main():
+    program_description = ("Program to interpolate precip data using the xesmf package, write\n"
+                           "write interpolated data to netCDF, and make plots of native and interpolated data.\n"
+                           "Note that each dataset requires different input date formats, listed below:\n"
+                           "\tAORC: YYYYmmdd.HH and PERIOD-ENDING\n"
+                           "\tCONUS404: YYYYmmdd.HH and PERIOD-ENDING\n"
+                           "\tERA5: YYYYmmdd.HH and PERIOD-BEGINNING\n"
+                           "\tIMERG: YYYYmmdd.HH[00,30] and PERIOD-BEGINNING\n"
+                           "\tReplay: YYYYmmdd.HH and PERIOD-ENDING\n")
+    print(program_description)
     parser = argparse.ArgumentParser()
-    parser.add_argument("dt_str",
-                        help = "Input date/time str; format YYYYmmdd")
+    parser.add_argument("start_dt_str",
+                        help = "Start date of time period over which to process data")
+    parser.add_argument("end_dt_str",
+                        help = "End date of time period over which to process data")
     parser.add_argument("--ds_name", dest = "ds_name", default = "CONUS404",
                         choices = utils.dataset_list, 
-                        help = "Dataset name; default CONUS404")
+                        help = "Dataset name to regrid; default CONUS404")
     parser.add_argument("--output_grid", dest = "output_grid", default = "Replay",
                         help = "Output grid name; default Replay")
     parser.add_argument("--interp_method", dest = "interp_method", default = "conservative",
@@ -35,13 +46,15 @@ def main():
                         help = "Temporal resolution of output (interpolated) data in hours; default 24")
     parser.add_argument("--plot", dest = "plot", default = False, action = "store_true",
                         help = "Set to make plots of native grid and interpolated data")
+    parser.add_argument("--region", dest = "region", default = "CONUS",
+                        help = "For plotting only: region to zoom plots to (default CONUS)")
     args = parser.parse_args()
 
     output_grid_string = pdp.set_grid_name_for_file_names(args.output_grid)
     print(f"Regridding {args.ds_name} to {output_grid_string}")
   
-    if (args.ds_name != "CONUS404") or (args.output_grid != "Replay"):
-        print(f"Error: Interpolation with xESMF for dataset {args.ds_name} to {args.output_grid} grid not yet implemented")
+    if (args.output_grid != "Replay"):
+        print(f"Error: Interpolation with xESMF to {args.output_grid} grid not yet implemented")
         sys.exit(1) 
  
     # Determine whether interpolating from a curvilinear (2-D lat/lon) grid
@@ -56,7 +69,46 @@ def main():
     input_ds_template = read_ds_template(args.ds_name) 
 
     # Read input dataset to interpolate
-    input_ds = read_input_data(args.dt_str, args.ds_name, args.temporal_res)
+    #input_ds = read_input_data(args.dt_str, args.ds_name, args.temporal_res)
+
+    # Instantiate correct data processor class and then
+    # get precip data at the dataset's native spatial resolution and the
+    # desired temporal resolution based on args.temporal_res. This data is what
+    # we'll regrid to args.output_grid using xESMF.
+    match args.ds_name:
+        case "AORC":
+            processor = pdp.AorcDataProcessor(args.start_dt_str,
+                                              args.end_dt_str,
+                                              region = args.region)
+            input_ds = processor.get_precip_data(spatial_res = "native", temporal_res = args.temporal_res, load = True)
+        case "CONUS404":
+            processor = pdp.CONUS404DataProcessor(args.start_dt_str,
+                                                  args.end_dt_str,
+                                                  region = args.region)
+            input_ds = processor.get_precip_data(spatial_res = "native", temporal_res = args.temporal_res, load = True)
+        case "ERA5":
+            processor = pdp.ERA5DataProcessor(args.start_dt_str,
+                                              args.end_dt_str,
+                                              region = args.region)
+            input_ds = processor.get_precip_data(spatial_res = "native", temporal_res = args.temporal_res, load = True)
+        case "IMERG":
+            processor = pdp.ImergDataProcessor(args.start_dt_str,
+                                               args.end_dt_str,
+                                               region = args.region)
+            input_ds = processor.get_precip_data(spatial_res = "native", temporal_res = args.temporal_res, load = True)
+        case "NestedReplay":
+            processor = pdp.NestedReplayDataProcessor(args.start_dt_str,
+                                                      args.end_dt_str,
+                                                      region = args.region)
+            input_ds = processor.get_precip_data(spatial_res = "native", temporal_res = args.temporal_res, load = True)
+        case "Replay":
+            processor = pdp.ReplayDataProcessor(args.start_dt_str,
+                                                args.end_dt_str,
+                                                region = args.region)
+            input_ds = processor.get_replay_precip_data(time_period_hours = args.temporal_res, spatial_res = "native", load = True) 
+        case _:
+            print(f"Sorry, data grid processing for dataset {args.data_name} is not currently supported")
+            sys.exit(0)
 
     # Run regridding
     output_ds = run_xesmf_interp(input_ds_template,
@@ -71,18 +123,22 @@ def main():
         print("Plotting")
 
         # Native grid
-        pputils.plot_cmap_single_panel(input_ds_template.precipitation_24_hour,
-                                       f"{args.ds_name}.{native_grid_str}",
-                                       f"{args.ds_name}.{native_grid_str}",
-                                       "CONUS",
+        pputils.plot_cmap_single_panel(#input_ds_template.precipitation_24_hour,
+                                       input_ds,
+                                       f"xesmf.{args.ds_name}.{native_grid_str}",
+                                       f"xesmf.{args.ds_name}.{native_grid_str}",
+                                       args.region,
                                        plot_levels = np.arange(0, 42, 2))
 
         # Output grid 
-        pputils.plot_cmap_single_panel(output_ds.precipitation_24_hour,
+        pputils.plot_cmap_single_panel(#output_ds.precipitation_24_hour,
+                                       output_ds,
                                        f"xesmf.{args.interp_method}.{args.ds_name}.{output_grid_string}",
                                        f"xesmf.{args.interp_method}.{args.ds_name}.{output_grid_string}",
-                                       "CONUS",
+                                       args.region,
                                        plot_levels = np.arange(0, 42, 2))
+
+    return input_ds, output_ds
 
 def add_bounds(ds):
     ds = ds.cf.add_bounds(["lat", "lon"])
@@ -104,8 +160,11 @@ def read_ds_template(ds_name):
     if not(os.path.exists(ds_template_fpath)):
         print(f"Error: Template file path {ds_template_fpath} does not exist")
         sys.exit(1)
+   
+    ds = xr.open_dataset(ds_template_fpath)
+    ds.attrs["ds_name"] = ds_name
     
-    return xr.open_dataset(ds_template_fpath)
+    return ds
 
 # Read input dataset to interpolate
 def read_input_data(dt_str, ds_name, temporal_res):
@@ -134,7 +193,7 @@ def run_xesmf_interp(in_ds_template, # Dataset on input grid
 
     # TODO: Generalize Regridder file name
     regridder_fpath = os.path.join(regridders_dir,
-                                   f"Regridder.CONUS404_to_Replay.{interp_method}.nc")
+                                   f"Regridder.{in_ds_template.ds_name}_to_{out_ds_template.ds_name}.{interp_method}.nc")
 
     if read_regridder: # Retrieve regridder from previously-written file
         print(f"Reading {interp_method} regridder {regridder_fpath}")
@@ -159,7 +218,7 @@ def run_xesmf_interp(in_ds_template, # Dataset on input grid
     return regridder(input_ds, keep_attrs = True)
 
 if __name__ == "__main__":
-    main()
+    input_ds, output_ds = main()
 
 
 
