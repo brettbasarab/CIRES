@@ -107,7 +107,6 @@ class PrecipVerificationProcessor(object):
         self.num_thresholds = len(self.thresholds)
         self.variable_plot_limits = pputils.variable_plot_limits("accum_precip", temporal_res = self.temporal_res)
         self.variable_pctl_plot_limits = pputils.variable_pctl_plot_limits("accum_precip", temporal_res = self.temporal_res)
-        self.replay_grid_cell_size = 0.234375
 
         self.user_dir = user_dir
         self.home_dir = os.path.join("/home", self.user_dir)
@@ -621,11 +620,12 @@ class PrecipVerificationProcessor(object):
         number_of_correct_negatives = len(np.where(correct_negatives_condition.values.flatten())[0])
         return number_of_correct_negatives
 
-    def how_to_plot_aggregated_stats(self):
+    def how_to_calculate_aggregated_stats(self):
         print("NOTE: If input_da_dict is None, self.da_dict will be used.")
-        print('calculate_aggregated_stats(input_da_dict = None,\n'
-              'time_period_type = None, agg_type = "space_time", stat_type = "mean",\n'
-              'pctl = 99, write_to_nc = False)')
+
+        print('calculate_aggregated_stats(input_da_dict = None, time_period_type = None\n'
+              '                           agg_type = "space_time", stat_type = "mean",\n'
+              '                           pctl = 99, write_to_nc = False)')
 
     # Calculate statistics valid for data aggregated in space, time, or space and time. Currently
     # only mean and percentile stats are supported. 
@@ -1419,8 +1419,14 @@ class PrecipVerificationProcessor(object):
     ##### END Private methods to support stats calculations #####
 
     ##### Public methods plotting #####
+    def how_to_plot_aggregated_fss(self):
+        print(f'plot_aggregated_fss(eval_type = [{evaluate_by_radius_kw_str}, {evaluate_by_threshold_kw_str},\n'
+              f'                     {evaluate_by_radius_ari_threshold_kw_str}, {evaluate_by_ari_kw_str}],\n'
+               '                     xaxis_explicit_values = False, time_period_type = "full_period",\n'
+               '                     is_pctl_threshold = False, include_frequency_bias = False, include_fss_uniform = False)')
+
     def plot_aggregated_fss(self, eval_type = evaluate_by_radius_kw_str, xaxis_explicit_values = False,
-                            time_period_type = "full_period", include_frequency_bias = False, is_pctl_threshold = False,
+                            time_period_type = "full_period", is_pctl_threshold = False, include_frequency_bias = False,
                             include_fss_uniform = False):
         # Only plot frequency bias on second axis if the first axis is plotted against amount thresholds.
         if is_pctl_threshold or (eval_type != evaluate_by_threshold_kw_str):
@@ -1631,7 +1637,9 @@ class PrecipVerificationProcessor(object):
 
     def how_to_plot_cmap_multi_panel(self):
         print("NOTE: If data_dict is passed it will be used directly, without aggregation using time_period_type.\n"
-              "So, the contents of data_dict must already be properly aggregated for desired cmaps.")
+              "So, the contents of data_dict must already be properly aggregated for desired cmaps.\n"
+              "If data_dict = None, self.da_dict will be used with aggregation according to time_period_type and stat_type.\n")
+
         print('plot_cmap_multi_panel(data_dict = None, plot_levels = np.arange(0, 85, 5),\n'
               '                      time_period_type = None, stat_type = "mean", pctl = 99,\n'
               '                      single_colorbar = True, single_set_of_levels = True, cmap = pputils.DEFAULT_PRECIP_CMAP,\n'
@@ -1764,9 +1772,11 @@ class PrecipVerificationProcessor(object):
 
     def how_to_plot_timeseries(self):
         print("NOTE: If data_dict is passed it will be used directly, without aggregation using time_period_type.\n"
-              "So, the contents of data_dict must already be properly aggregated for a time series.")
+              "So, the contents of data_dict must already be properly aggregated for a time series.\n"
+              "If data_dict = None, self.da_dict will be used with aggregation according to time_period_type and stat_type.\n")
+
         print('plot_timeseries(data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, plot_levels = None, \n'
-                               'write_to_nc = False, ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True)')
+              '                write_to_nc = False, ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True)')
 
     def plot_timeseries(self, data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, plot_levels = None,
                         write_to_nc = False, ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True):

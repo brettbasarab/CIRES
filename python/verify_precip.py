@@ -57,6 +57,8 @@ def main():
     # Plotting flags
     parser.add_argument("--plot", dest = "plot", action = "store_true", default = False,
                         help = "Set to make plots of calculated stats")
+    parser.add_argument("--plot_fss_timeseries", dest = "plot_fss_timeseries", action = "store_true", default = False,
+                        help = "Set to plot timeseries of FSS for each individual time period within evaluation period (useful for shorter 1-3 month analyses)")
     parser.add_argument("--poster", dest = "poster", action = "store_true", default = False,
                         help = "Set if plots to be produced are for a poster; will make plot fonts bigger")
     parser.add_argument("--scatter_plot", dest = "scatter_plot", action = "store_true", default = False,
@@ -172,6 +174,11 @@ def main():
                                               time_period_type = time_period_type,
                                               is_pctl_threshold = False, 
                                               include_frequency_bias = True)
+
+            # Plot FSS timeseries (using amount thresholds) for each time period across evaluation period
+            if args.plot_fss_timeseries:
+                print(f"Plotting FSS timeseries for eval radius {2*grid_cell_size:0.2f} deg; threshold 10mm")
+                verif.plot_fss_timeseries(2 * grid_cell_size, 10)
      
         # Calculate and plot fractions skill score (FSS) by radius and percentile threshold 
         if args.fss_pctl:
