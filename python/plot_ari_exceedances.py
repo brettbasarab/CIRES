@@ -30,6 +30,8 @@ def main():
                         help = "Temporal resolution of precip data used in verification (default 24)")
     parser.add_argument("--ari", dest = "ari", type = int, default = 2,
                         help = "Average Recurrence Interval (ARI) for which to count exceedances; default 2-year") 
+    parser.add_argument("--each_day", dest = "each_day", default = False, action = "store_true",
+                        help = "Set to plot ARI exceedance maps for each individual day in time period, to get a sense of how they accumulate over time")
     args = parser.parse_args()
     
     # Read ARI grid
@@ -64,29 +66,28 @@ def main():
     # Subset ARI grid to current region
     aris_region_subset = verif._subset_data_to_region(aris, data_name = "ARI_grid")
 
-    # Calculate number of ARI exceedances
-    ari_exceedance_dict = {}
-    for data_name, da in verif.da_dict.items():
-        # Calculate ARI exceedances, sum over full time period along time dimension
-        ari_exceedance_da = xr.where(da > aris_region_subset, 1, 0, keep_attrs = True)
-        ari_exceedance_da_sum = ari_exceedance_da.sum(dim = utils.period_end_time_dim_str, keepdims = True)
-
-        # Add a period_end_time dimension to facilitate plotting
-        end_dt = pd.Timestamp(da[utils.period_end_time_dim_str].values[-1])
-        ari_exceedance_da_sum.coords[utils.period_end_time_dim_str] = [end_dt]
-
-        # Add relevant attributes for plotting
-        pdp.add_attributes_to_data_array(ari_exceedance_da_sum,
-                                         short_name = f"{args.ari:02d}year_{args.temporal_res:02d}hour_ARIexcd",
-                                         long_name = f"{args.ari:02d} year, {args.temporal_res:02d} hour ARI Exceedances",
-                                         units = "")
-
-        # Add to dictionary
-        ari_exceedance_dict[data_name] = ari_exceedance_da_sum
-
-    # Plot cumulative ARI exceedances
     cmap, bounds, norm = create_ari_colorbar()
-    verif.plot_cmap_multi_panel(data_dict = ari_exceedance_dict, plot_levels = bounds, plot_cmap = cmap) 
+    if args.each_day:
+        for v, valid_dt in enumerate(verif.truth_da.period_end_time.values):
+            da_dict = {}
+            for data_name, da in verif.da_dict.items():
+                da_dict[data_name] = da[:(v + 1),:,:]
+
+            # Calculate number of ARI exceedances
+            ari_exceedance_dict = calculate_ari_exceedances(da_dict, aris_region_subset,
+                                                            ari = args.ari, temporal_res = args.temporal_res)
+
+            # Plot cumulative ARI exceedances
+            verif.plot_cmap_multi_panel(data_dict = ari_exceedance_dict, plot_levels = bounds, plot_cmap = cmap)
+    else:
+        # Calculate number of ARI exceedances
+        ari_exceedance_dict = calculate_ari_exceedances(verif.da_dict, aris_region_subset,
+                                                        ari = args.ari, temporal_res = args.temporal_res)
+
+        # Plot cumulative ARI exceedances
+        verif.plot_cmap_multi_panel(data_dict = ari_exceedance_dict, plot_levels = bounds, plot_cmap = cmap)
+
+    return verif 
  
 def create_ari_colorbar():
     color_list = ["white", "cyan", "blue", "green", "red", "purple"]
@@ -104,5 +105,28 @@ def create_ari_colorbar():
 
     return cmap, bounds, norm
 
+def calculate_ari_exceedances(da_dict, aris_region_subset, ari = 2, temporal_res = 24):
+    ari_exceedance_dict = {}
+    for data_name, da in da_dict.items():
+        # Calculate ARI exceedances, sum over full time period along time dimension
+        ari_exceedance_da = xr.where(da > aris_region_subset, 1, 0, keep_attrs = True)
+        ari_exceedance_da_sum = ari_exceedance_da.sum(dim = utils.period_end_time_dim_str, keepdims = True)
+
+        # Add a period_end_time dimension to facilitate plotting
+        end_dt = pd.Timestamp(da[utils.period_end_time_dim_str].values[-1])
+        ari_exceedance_da_sum.coords[utils.period_end_time_dim_str] = [end_dt]
+        print(f"Calculating ARI exceedances ending at {end_dt:%Y%m%d.%H}")
+
+        # Add relevant attributes for plotting
+        pdp.add_attributes_to_data_array(ari_exceedance_da_sum,
+                                         short_name = f"{ari:02d}year_{temporal_res:02d}hour_ARIexcd",
+                                         long_name = f"{ari:02d} year, {temporal_res:02d} hour ARI Exceedances",
+                                         units = "")
+
+        # Add to dictionary
+        ari_exceedance_dict[data_name] = ari_exceedance_da_sum
+
+    return ari_exceedance_dict
+
 if __name__ == "__main__":
-    main()
+    verif = main()
