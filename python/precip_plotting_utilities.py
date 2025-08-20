@@ -244,31 +244,73 @@ regions_info_dict = \
 # Map three-letter month strings to the correponding numerical month of the year.
 def month_string_to_month_number(month_string):
     month_to_number_dict = {
-                           "JAN" :  1,
-                           "FEB" :  2,
-                           "MAR" :  3,
-                           "APR" :  4,
-                           "MAY" :  5,
-                           "JUN" :  6,
-                           "JUL" :  7,
-                           "AUG" :  8,
-                           "SEP" :  9,
-                           "OCT" : 10,
-                           "NOV" : 11,
-                           "DEC" : 12,
+                            "JAN" :  1,
+                            "FEB" :  2,
+                            "MAR" :  3,
+                            "APR" :  4,
+                            "MAY" :  5,
+                            "JUN" :  6,
+                            "JUL" :  7,
+                            "AUG" :  8,
+                            "SEP" :  9,
+                            "OCT" : 10,
+                            "NOV" : 11,
+                            "DEC" : 12,
                            }
+
     return month_to_number_dict[month_string]
 
 # Map three-letter season strings to the corresponding numerical season (chose
 # to start counting with DJF = 1).
 def season_string_to_season_number(season_string):
     season_to_number_dict = {
-                           "DJF" :  1,
-                           "MAM" :  2,
-                           "JJA" :  3,
-                           "SON" :  4,
-                           }
+                             "DJF" :  1,
+                             "MAM" :  2,
+                             "JJA" :  3,
+                             "SON" :  4,
+                            }
+
     return season_to_number_dict[season_string]
+
+# Map a datetime object to the common month string
+def dtime_to_month_string(dtime):
+    month = dtime.month
+    month_to_month_string_dict = {
+                                  1  : "JAN",
+                                  2  : "FEB",
+                                  3  : "MAR",
+                                  4  : "APR",
+                                  5  : "MAY",
+                                  6  : "JUN",
+                                  7  : "JUL",
+                                  8  : "AUG",
+                                  9  : "SEP",
+                                  10 : "OCT",
+                                  11 : "NOV",
+                                  12 : "DEC",
+                                 }
+
+    return month_to_month_string_dict[month]
+
+# Map a datetime object to the common season string
+def dtime_to_season_string(dtime):
+    month = dtime.month
+    month_to_season_string_dict = {
+                                   1  : "DJF",
+                                   2  : "DJF",
+                                   3  : "MAM",
+                                   4  : "MAM",
+                                   5  : "MAM",
+                                   6  : "JJA",
+                                   7  : "JJA",
+                                   8  : "JJA",
+                                   9  : "SON",
+                                   10 : "SON",
+                                   11 : "SON",
+                                   12 : "DJF",
+                                  }
+
+    return month_to_season_string_dict[month]
 
 # Returns a 12-element list of three-letter months strings.
 def construct_monthly_string_list():

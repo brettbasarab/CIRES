@@ -28,11 +28,12 @@ def main():
     parser.add_argument("--pctl", dest = "pctl", type = float, default = 99,
                         help = "Percentile to use for exceedances; default 99th")
     parser.add_argument("--time_period_type", dest = "time_period_type", default = "monthly",
+                        choices = ["monthly", "seasonal"],
                         help = "Time period type: monthly, seasonal, etc.; default  monthly")
-    parser.add_argument("--exclude_zeros", dest = "exclude_zeros", action = "store_true", default = False,
-                        help = "Set to exclude zeros from percentile calculations; default False")
     parser.add_argument("--plot_cmaps", dest = "plot_cmaps", action = "store_true", default = False,
                         help = "Set to plot contour maps of percentiles for each time period, and percentile exceedances")
+    parser.add_argument("--climo_pctls", dest = "climo_pctls", action = "store_true", default = False,
+                        help = "Set to calculate percentiles over all common months or seasons so they better represent a 'climatology'")
     parser.add_argument("--excd_type", dest = "excd_type", default = "mdl_excd_obs_pctl",
                         choices = ["obs_excd_obs_pctl", "mdl_excd_obs_pctl", "mdl_excd_mdl_pctl"],
                         help = "Type of exceedances for which to calculate means (default mdl_excd_obs_pctl); \n"
@@ -60,14 +61,19 @@ def main():
                                                                           temporal_res = 24,
                                                                           region = region) 
 
-        # (Not using for now)
         # Over a longer time period, if you use common_monthly or common_seasonal
-        # to calculate percentiles, the percentiles represent something close to a climatology (?)
-        # as opposed to the percentiles specific to a particular month or season.
-        if args.time_period_type == "monthly":
-            pctl_agg_type = "common_monthly"
-        elif args.time_period_type == "seasonal":
-            pctl_agg_type = "common_seasonal"
+        # to calculate percentiles, the percentiles represent something closer to a climatology
+        # rather than percentiles specific to a particular month or season.
+        if args.climo_pctls:
+            if (args.time_period_type == "monthly"):
+                pctl_time_period_type = "common_monthly"
+            else:
+                pctl_time_period_type = "common_seasonal"
+
+            pctl_agg_dict = verif.calculate_aggregated_stats(time_period_type = pctl_time_period_type,
+                                                             stat_type = "pctl",
+                                                             agg_type = "time",
+                                                             pctl = args.pctl)
 
         # Get observed data grid (AORC)
         obs_da = verif.truth_da 
@@ -84,6 +90,8 @@ def main():
             data_array = utils.convert_period_end_to_period_begin(da)
             final_da_list = []
             for dtime in dtimes:
+                print(f"**** Dtime: {dtime}")
+
                 # Observed data
                 obs_da_sel_time_period = verif._determine_agg_data_from_time_period_type(obs_da_period_begin,
                                                                                          args.time_period_type,
@@ -94,23 +102,27 @@ def main():
                                                                                      args.time_period_type,
                                                                                      dtime)
 
-                # Retain or exclude zeros in data arrays for percentile calculations
-                if args.exclude_zeros:
-                    obs_da_for_pctls = obs_da_sel_time_period.where(obs_da_sel_time_period > 0.0)
-                    model_da_for_pctls = da_sel_time_period.where(da_sel_time_period > 0.0)
-                    exclude_zeros_str = ".exclude_zeros"
+                # Percentiles are calculated across each common time period (e.g., all Junes, all JJAs)
+                if args.climo_pctls:
+                    if (pctl_time_period_type == "common_monthly"): 
+                        sel_string = pputils.dtime_to_month_string(dtime) 
+                        obs_pctl_sel_time_period = pctl_agg_dict[verif.truth_data_name].sel(common_month = sel_string)
+                        da_pctl_sel_time_period = pctl_agg_dict[data_name].sel(common_month = sel_string)
+                    else:
+                        sel_string = pputils.dtime_to_season_string(dtime[0]) # For seasonal, each dtime is a list of two dtimes
+                        obs_pctl_sel_time_period = pctl_agg_dict[verif.truth_data_name].sel(common_season = sel_string)
+                        da_pctl_sel_time_period = pctl_agg_dict[data_name].sel(common_season = sel_string)
+                # Percentiles are calculated for each valid time period (i.e., each dtime in dtimes)
                 else:
-                    obs_da_for_pctls = obs_da_sel_time_period
-                    model_da_for_pctls = da_sel_time_period
-                    exclude_zeros_str = ""
-     
-                # Observed percentile
-                obs_pctl_sel_time_period = obs_da_for_pctls.quantile(args.pctl/100, keep_attrs = True,
-                                                                     dim = utils.period_begin_time_dim_str)
+                    # Observed percentile
+                    obs_pctl_sel_time_period = obs_da_sel_time_period.quantile(args.pctl/100, keep_attrs = True,
+                                                                               dim = utils.period_begin_time_dim_str)
 
-                # Model percentile
-                da_pctl_sel_time_period = model_da_for_pctls.quantile(args.pctl/100, keep_attrs = True,
-                                                                      dim = utils.period_begin_time_dim_str)
+                    # Model percentile
+                    da_pctl_sel_time_period = da_sel_time_period.quantile(args.pctl/100, keep_attrs = True,
+                                                                          dim = utils.period_begin_time_dim_str)
+
+                print(obs_da_sel_time_period.shape, da_sel_time_period.shape, obs_pctl_sel_time_period.shape, da_pctl_sel_time_period.shape)
 
                 # Plotting
                 if (args.plot_cmaps):
@@ -124,14 +136,14 @@ def main():
      
                     if (data_name == "AORC"):
                         pputils.plot_cmap_single_panel(obs_pctl_sel_time_period, 
-                                                       f"{data_name}.obs_pctl{exclude_zeros_str}.{dt_str}",
-                                                       f"{data_name}.obs_pctl{exclude_zeros_str}.{dt_str}",
+                                                       f"{data_name}.obs_pctl.{dt_str}",
+                                                       f"{data_name}.obs_pctl.{dt_str}",
                                                        region,
                                                        plot_levels = np.arange(0, 62, 2))
                     else:
                         pputils.plot_cmap_single_panel(da_pctl_sel_time_period, 
-                                                       f"{data_name}.da_pctl{exclude_zeros_str}.{dt_str}",
-                                                       f"{data_name}.da_pctl{exclude_zeros_str}.{dt_str}",
+                                                       f"{data_name}.da_pctl.{dt_str}",
+                                                       f"{data_name}.da_pctl.{dt_str}",
                                                        region,
                                                        plot_levels = np.arange(0, 62, 2))
 
@@ -225,4 +237,16 @@ for data_name, da in verif.da_dict.items():
   print(f"***** {data_name}")
   print(da_excd_full_period.mean().item())
   print(da_excd_september.mean().item())
+
+# Code to exclude zeros from percentile calculations
+parser.add_argument("--exclude_zeros", dest = "exclude_zeros", action = "store_true", default = False,
+                    help = "Set to exclude zeros from percentile calculations; default False")
+if args.exclude_zeros:
+    obs_da_for_pctls = obs_da_sel_time_period.where(obs_da_sel_time_period > 0.0)
+    model_da_for_pctls = da_sel_time_period.where(da_sel_time_period > 0.0)
+    exclude_zeros_str = ".exclude_zeros"
+else:
+    obs_da_for_pctls = obs_da_sel_time_period
+    model_da_for_pctls = da_sel_time_period
+    exclude_zeros_str = ""
 """
