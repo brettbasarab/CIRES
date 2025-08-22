@@ -63,7 +63,7 @@ regions_info_dict = \
                 region_extent = [-103, -85, 24, 51],
                 figsize_sp = (11, 18), 
                 figsize_2p = (9, 8), 
-                figsize_mp = (11, 17), 
+                figsize_mp = (11, 16), # (11, 17) 
                 figsize_mp_5plus = (11, 14.5),
                 cm_mean_precip_range = np.arange(0, 6.5, 0.5), 
                 ts_mean_precip_range = np.arange(0, 6.5, 0.5),
@@ -86,7 +86,7 @@ regions_info_dict = \
                 region_extent = [-129, -113, 28, 51],
                 figsize_sp = (10, 15), 
                 figsize_2p = (9, 8), 
-                figsize_mp = (10, 15), 
+                figsize_mp = (10, 14), # (10, 15) 
                 figsize_mp_5plus = (10, 12.5),
                 cm_mean_precip_range = np.arange(0, 15, 1),
                 ts_mean_precip_range = np.arange(0, 7.5, 0.5),
@@ -621,11 +621,11 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
         case 3:
             if single_colorbar:
                 axes_list = [
-                            plt.subplot2grid((9, 4), (0, 0), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 4), (0, 2), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 4), (4, 1), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((11, 4), (0, 0), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 4), (0, 2), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 4), (5, 1), colspan = 2, rowspan = 5, projection = proj),
                             ]
-                cbar_ax = plt.subplot2grid((9, 4), (8, 1), colspan = 2, rowspan = 1)
+                cbar_ax = plt.subplot2grid((11, 4), (10, 1), colspan = 2, rowspan = 1)
             else:
                 axes_list = [
                             plt.subplot2grid((8, 4), (0, 0), colspan = 2, rowspan = 4, projection = proj),
@@ -635,12 +635,12 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
         case 4:
             if single_colorbar:
                 axes_list = [
-                            plt.subplot2grid((9, 4), (0, 0), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 4), (0, 2), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 4), (4, 0), colspan = 2, rowspan = 4, projection = proj),
-                            plt.subplot2grid((9, 4), (4, 2), colspan = 2, rowspan = 4, projection = proj),
+                            plt.subplot2grid((11, 4), (0, 0), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 4), (0, 2), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 4), (5, 0), colspan = 2, rowspan = 5, projection = proj),
+                            plt.subplot2grid((11, 4), (5, 2), colspan = 2, rowspan = 5, projection = proj),
                             ]
-                cbar_ax = plt.subplot2grid((9, 4), (8, 1), colspan = 2, rowspan = 1)
+                cbar_ax = plt.subplot2grid((11, 4), (10, 1), colspan = 2, rowspan = 1)
             else:
                 axes_list = [
                             plt.subplot2grid((8, 4), (0, 0), colspan = 2, rowspan = 4, projection = proj),
@@ -742,11 +742,11 @@ def determine_if_has_time_dim(data_array):
     return False
 
 def how_to_plot_cmap_single_panel():
-    print('plot_cmap_single_panel(data_array, plot_name, fig_name, region, plot_levels = np.arange(0, 85, 5),\n'
+    print('plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arange(0, 85, 5),\n'
           '                       short_name = "precip_data", proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP)')
 
 # For each time in the data array, create a single-paneled contour plot of precipitation
-def plot_cmap_single_panel(data_array, plot_name, fig_name, region, plot_levels = np.arange(0, 85, 5),
+def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arange(0, 85, 5),
                            short_name = "precip_data", proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP):
     match proj_name:
         case "LambertConformal":
@@ -794,12 +794,8 @@ def plot_cmap_single_panel(data_array, plot_name, fig_name, region, plot_levels 
                                         x = xy_coords.x, y = xy_coords.y, 
                                         cbar_kwargs = {"orientation": "horizontal", "ticks": plot_levels})
 
-        # Configure color bar, axis labels and ticks, title, and figure name
-        try:
-            formatted_short_name = precip_data_processors.format_short_name(data_array)
-        except AttributeError:
-            formatted_short_name = short_name
 
+        # Configure color bar, axis labels and ticks, title, and figure name
         plot_handle.colorbar.set_label(data_array.units, size = 15) 
         plot_handle.colorbar.ax.set_xticklabels(plot_levels)
         plot_handle.colorbar.ax.tick_params(labelsize = 15)
@@ -807,8 +803,19 @@ def plot_cmap_single_panel(data_array, plot_name, fig_name, region, plot_levels 
         plt.ylabel("Longitude", fontsize = 15)
         plt.xticks(fontsize = 15)
         plt.yticks(fontsize = 15)
-       
-        title_string = f"{plot_name} {formatted_short_name}, {region}" 
+        
+        # Determine short_name, a short descriptor of the data to use in plot title and figure name
+        # Use the keyword arg first, otherwise try to get the short name from the data array attributes.
+        if (type(short_name) is str) and (short_name != ""):
+            formatted_short_name = short_name
+        else: 
+            try:
+                formatted_short_name = precip_data_processors.format_short_name(data_array)
+            except AttributeError:
+                formatted_short_name = "precip_data" 
+      
+        # Create plot title 
+        title_string = f"{data_name} {region} {formatted_short_name}" 
         if (type(dtime) is pd.Timestamp):
             title_string += f": valid at {dt_str}"
         elif (type(dtime) is str) and (has_time_dim):
@@ -818,9 +825,9 @@ def plot_cmap_single_panel(data_array, plot_name, fig_name, region, plot_levels 
 
         # Save figure
         if has_time_dim:
-            fig_full_name = f"cmap.{fig_name}.{formatted_short_name}.{dt_str}.{region}.png"
+            fig_full_name = f"cmap.{data_name}.{formatted_short_name}.{dt_str}.{region}.png"
         else:
-            fig_full_name = f"cmap.{fig_name}.{formatted_short_name}.{region}.png"
+            fig_full_name = f"cmap.{data_name}.{formatted_short_name}.{region}.png"
         fig_path = os.path.join(utils.plot_output_dir, fig_full_name)
         print(f"Saving {fig_path}")
         plt.savefig(fig_path)
@@ -907,12 +914,18 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.a
                 plot_handle.colorbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
             axis.set_title(data_name, fontsize = 16)
 
-        # Create the plot title 
-        try:
-            formatted_short_name = precip_data_processors.format_short_name(truth_da)
-        except AttributeError:
+       
+        # Determine short_name, a short descriptor of the data to use in plot title and figure name
+        # Use the keyword arg first, otherwise try to get the short name from the data array attributes.
+        if (type(short_name) is str) and (short_name != ""):
             formatted_short_name = short_name
+        else: 
+            try:
+                formatted_short_name = precip_data_processors.format_short_name(truth_da)
+            except AttributeError:
+                formatted_short_name = "precip_data" 
 
+        # Create plot title
         if (type(dtime) is pd.Timestamp):
             title_string = f"{region} {formatted_short_name} valid at {dt_str}"
         elif (type(dtime) is str) and (has_time_dim):

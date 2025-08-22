@@ -16,6 +16,8 @@ import sys
 import utilities as utils
 import xarray as xr
 
+# TODO: Update plot_cmap_multi_panel() to be able to handle 2-D lat/lons (e.g., for CONUS404)
+# like the similar function in precip_plotting_utilities.py
 # TODO (both low priority):
     # Figure out the source of the "All-NaN slice encountered" warning in percentile calculations
     # Update plot names to use '.' notation
@@ -76,7 +78,7 @@ class PrecipVerificationProcessor(object):
     def __init__(self, start_dt_str, end_dt_str,
                  LOAD_DATA = True, # If True, load data from repository of netCDF files (otherwise use existing non-region-subsetted arrays)
                  loaded_non_subset_da_dict = None, # Dictionary of loaded but non-region-subsetted DataArrays
-                 USE_EXTERNAL_DA_DICT = False, # If True, use data from an external DataArray dictionary load data directly that we'll need
+                 USE_EXTERNAL_DA_DICT = False, # If True, use data from an external DataArray dictionary; if False, load data directly that we'll need
                  IS_STANDARD_INPUT_DICT = True, # If True, assumes that external_da_dict is a dictionary of the form {data_name_1: da_1, ...,data_name_N: da_N}  
                  external_da_dict = None, # Dictionary of precalculated data arrays for which to make plots (only used if USE_EXTERNAL_DA_DICT = True)
                  data_names = ["AORC", "IMERG", "Replay", "ERA5"],
@@ -308,7 +310,7 @@ class PrecipVerificationProcessor(object):
 
                 # Read multi-file dataset
                 dataset = xr.open_mfdataset(file_list)
-                precip_da = dataset[f"precipitation_{self.temporal_res}_hour"]
+                precip_da = dataset[f"precipitation_{self.temporal_res:02d}_hour"]
                 precip_da.attrs["data_name"] = data_name
 
                 # Index obs data array to correct datetime range

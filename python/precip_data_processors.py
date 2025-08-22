@@ -429,7 +429,7 @@ class ReplayDataProcessor(object):
                 accum_precip_data_array = accum_precip_data_array.rename({utils.time_dim_str: utils.period_end_time_dim_str}) 
               
                 add_attributes_to_data_array(accum_precip_data_array,
-                                             short_name = f"{self.temporal_res}-hour precipitation",
+                                             short_name = f"{self.temporal_res:02d}-hour precipitation",
                                              long_name = f"Precipitation accumulated over the prior {self.temporal_res} hour(s)",
                                              units = "mm",
                                              interval_hours = self.temporal_res) 
@@ -455,7 +455,7 @@ class ReplayDataProcessor(object):
         accum_precip_data_array = roller.sum()[(time_step - 1)::time_step,:,:]
 
         add_attributes_to_data_array(accum_precip_data_array,
-                                     short_name = f"{time_period_hours}-hour precipitation",
+                                     short_name = f"{time_period_hours:02d}-hour precipitation",
                                      long_name = f"Precipitation accumulated over the prior {time_period_hours} hour(s)",
                                      units = self.variables_data_dict[utils.accum_precip_var_name].units,
                                      interval_hours = time_period_hours)
@@ -515,7 +515,7 @@ class ReplayDataProcessor(object):
             # Set attributes properly
             time_period = num_time_intervals * self.temporal_res
             if (var == utils.accum_precip_var_name):
-                short_name = f"{time_period}-hour precipitation"
+                short_name = f"{time_period:02d}-hour precipitation"
                 long_name = f"Precipitation accumulated over the prior {time_period} hour(s)"
             else:
                 short_name = self.get_replay_var_long_name(var)
@@ -591,7 +591,7 @@ class ReplayDataProcessor(object):
         # Get data to write
         full_data_array = self.get_replay_precip_data(time_period_hours = temporal_res, spatial_res = spatial_res, load = True)
 
-        output_var_name = f"precipitation_{temporal_res}_hour"
+        output_var_name = f"precipitation_{temporal_res:02d}_hour"
         formatted_short_name = f"{temporal_res:02d}_hour_precipitation"
         full_data_array.name = output_var_name
         
@@ -945,7 +945,7 @@ class ImergDataProcessor(ReplayDataProcessor):
             output_var_name = "precipitation"
             formatted_short_name = format_short_name(full_data_array)
         else:
-            output_var_name = f"precipitation_{temporal_res}_hour"
+            output_var_name = f"precipitation_{temporal_res:02d}_hour"
             formatted_short_name = f"{temporal_res:02d}_hour_precipitation"
         full_data_array.name = output_var_name
         
@@ -1145,7 +1145,7 @@ class ERA5DataProcessor(ReplayDataProcessor):
                
                 # Add attributes to the accumulated precip data array
                 add_attributes_to_data_array(accum_precip_data_array,
-                                             short_name = f"{self.temporal_res}-hour precipitation",
+                                             short_name = f"{self.temporal_res:02d}-hour precipitation",
                                              long_name = f"Precipitation accumulated over the prior {self.temporal_res} hour(s)",
                                              units = "mm",
                                              interval_hours = self.temporal_res) 
@@ -1169,7 +1169,7 @@ class ERA5DataProcessor(ReplayDataProcessor):
         accum_precip_data_array = roller.sum()[(time_step - 1)::time_step,:,:]
 
         add_attributes_to_data_array(accum_precip_data_array,
-                                     short_name = f"{time_period_hours}-hour precipitation",
+                                     short_name = f"{time_period_hours:02d}-hour precipitation",
                                      long_name = f"Precipitation accumulated over the prior {time_period_hours} hour(s)",
                                      units = self.era5_da_dict[utils.accum_precip_var_name].units,
                                      interval_hours = time_period_hours)
@@ -1203,7 +1203,7 @@ class ERA5DataProcessor(ReplayDataProcessor):
             output_var_name = "precipitation"
             formatted_short_name = format_short_name(full_data_array)
         else:
-            output_var_name = f"precipitation_{temporal_res}_hour"
+            output_var_name = f"precipitation_{temporal_res:02d}_hour"
             formatted_short_name = f"{temporal_res:02d}_hour_precipitation"
         full_data_array.name = output_var_name
         
@@ -1389,7 +1389,7 @@ class AorcDataProcessor(ReplayDataProcessor):
        
         # Add attributes to the accumulated precip data array
         add_attributes_to_data_array(accum_precip_data_array,
-                                     short_name = f"{self.obs_temporal_res}-hour precipitation",
+                                     short_name = f"{self.obs_temporal_res:02d}-hour precipitation",
                                      long_name = f"Precipitation accumulated over the prior {self.obs_temporal_res} hour(s)",
                                      units = "mm",
                                      interval_hours = self.obs_temporal_res) 
@@ -1410,7 +1410,7 @@ class AorcDataProcessor(ReplayDataProcessor):
         accum_precip_data_array = roller.sum()[(time_step - 1)::time_step,:,:]
 
         add_attributes_to_data_array(accum_precip_data_array,
-                                     short_name = f"{time_period_hours}-hour precipitation",
+                                     short_name = f"{time_period_hours:02d}-hour precipitation",
                                      long_name = f"Precipitation accumulated over the prior {time_period_hours} hour(s)",
                                      units = self.aorc_native_accum_precip.units,
                                      interval_hours = time_period_hours)
@@ -1449,7 +1449,7 @@ class AorcDataProcessor(ReplayDataProcessor):
             output_var_name = "precipitation"
             formatted_short_name = format_short_name(full_data_array)
         else:
-            output_var_name = f"precipitation_{temporal_res}_hour"
+            output_var_name = f"precipitation_{temporal_res:02d}_hour"
             formatted_short_name = f"{temporal_res:02d}_hour_precipitation"
         full_data_array.name = output_var_name
         
@@ -1600,7 +1600,7 @@ class CONUS404DataProcessor(object):
                 # For CONUS404 precip, standardize DataArray attributes
                 accum_precip_data_array = self.conus404_da_dict[var_name]
                 add_attributes_to_data_array(accum_precip_data_array,
-                                             short_name = f"{self.native_temporal_res}-hour precipitation",
+                                             short_name = f"{self.native_temporal_res:02d}-hour precipitation",
                                              long_name = f"Precipitation accumulated over the prior {self.native_temporal_res} hour(s)",
                                              units = "mm",
                                              interval_hours = self.native_temporal_res) 
@@ -1622,7 +1622,7 @@ class CONUS404DataProcessor(object):
         accum_precip_data_array = roller.sum()[(time_step - 1)::time_step,:,:]
 
         add_attributes_to_data_array(accum_precip_data_array,
-                                     short_name = f"{time_period_hours}-hour precipitation",
+                                     short_name = f"{time_period_hours:02d}-hour precipitation",
                                      long_name = f"Precipitation accumulated over the prior {time_period_hours} hour(s)",
                                      units = self.conus404_native_accum_precip.units,
                                      interval_hours = time_period_hours)
@@ -1736,7 +1736,7 @@ class CONUS404DataProcessor(object):
                 output_var_name = "precipitation"
                 formatted_short_name = format_short_name(full_data_array)
             else:
-                output_var_name = f"precipitation_{temporal_res}_hour"
+                output_var_name = f"precipitation_{temporal_res:02d}_hour"
                 formatted_short_name = f"{temporal_res:02d}_hour_precipitation"
             full_data_array.name = output_var_name
             
@@ -1831,7 +1831,7 @@ class NestedReplayDataProcessor(object):
             print(f"No data at {spatial_res} spatial resolution")
             return
         elif (spatial_res == "native") and (temporal_res == "native"):
-            return self.nested_replay_native_accum_precip
+            data_array = self.nested_replay_native_accum_precip
         else:
             data_array = self._calculate_nested_replay_accum_precip_amount(time_period_hours = temporal_res, spatial_res = spatial_res)
  
@@ -1889,7 +1889,7 @@ class NestedReplayDataProcessor(object):
        
         # Add attributes to the accumulated precip data array
         add_attributes_to_data_array(accum_precip_data_array,
-                                     short_name = f"{self.native_temporal_res}-hour precipitation",
+                                     short_name = f"{self.native_temporal_res:02d}-hour precipitation",
                                      long_name = f"Precipitation accumulated over the prior {self.native_temporal_res} hour(s)",
                                      units = "mm",
                                      interval_hours = self.native_temporal_res) 
@@ -1912,7 +1912,7 @@ class NestedReplayDataProcessor(object):
         accum_precip_data_array = roller.sum()[(time_step - 1)::time_step,:,:]
 
         add_attributes_to_data_array(accum_precip_data_array,
-                                     short_name = f"{time_period_hours}-hour precipitation",
+                                     short_name = f"{time_period_hours:02d}-hour precipitation",
                                      long_name = f"Precipitation accumulated over the prior {time_period_hours} hour(s)",
                                      units = self.nested_replay_native_accum_precip.units,
                                      interval_hours = time_period_hours)

@@ -117,7 +117,7 @@ def read_data_from_nc_files(data_names, temporal_res, region, data_grid, start_d
             print(f"Error: Input nc file path {fpath} does not exist")
             sys.exit(1)
         print(f"Reading nc file {fpath}")
-        da = xr.open_dataset(fpath)[f"precipitation_{temporal_res}_hour"] 
+        da = xr.open_dataset(fpath)[f"precipitation_{temporal_res:02d}_hour"] 
 
         da_dict[data_name] = da
     return da_dict
