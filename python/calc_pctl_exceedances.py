@@ -23,6 +23,12 @@ def main():
                         help = "Start date/time string")
     parser.add_argument("end_dt_str",
                         help = "End date/time string")
+    parser.add_argument("--data_names_list", dest = "data_names_list", default = None, nargs = "+",
+                        help = "List of data names to verify; pass space-separated with the truth data name listed first; if None, all possible datasets for the given region are verified")
+    parser.add_argument("--verif_grid", dest = "verif_grid", default = "Replay", choices = ["AORC", "Replay"],
+                        help = "Set a standard verification grid for CONUS (or subregions) verification [AORC and (global) Replay are currently supported; default Replay]")
+    parser.add_argument("--include_hrrr", dest = "include_hrrr", action = "store_true", default = False,
+                        help = "Set to include HRRR in verification")
     parser.add_argument("--regions", dest = "regions", nargs = "+", default = ["CONUS"],
                         help = "Regions for which to perform verification; default CONUS")
     parser.add_argument("--pctl", dest = "pctl", type = float, default = 99,
@@ -42,7 +48,7 @@ def main():
                                "mdl_excd_mdl_pctl: Model's own exceedances of its own pctl;\n"
                                "default mdl_excd_obs_pctl")
     args = parser.parse_args()
-
+    
     for r, region in enumerate(args.regions):
         LOAD_DATA = True
         loaded_non_subset_da_dict = None 
@@ -50,14 +56,23 @@ def main():
             LOAD_DATA = False
             loaded_non_subset_da_dict = verif.loaded_non_subset_da_dict # From previous instantiation of PrecipVerificationProcessor
 
+        # Determine data names to use for this particular type of verification 
+        if (type(args.data_names_list) is list) and (len(args.data_names_list) >= 1):
+            data_names, truth_data_name = args.data_names_list, args.data_names_list[0]
+            _, _, data_grid = precip_verification_processor.map_region_to_data_names(args.region, verif_grid = args.verif_grid)
+        else:
+            data_names, truth_data_name, data_grid = precip_verification_processor.map_region_to_data_names(region,
+                                                                                                            verif_grid = args.verif_grid,
+                                                                                                            include_hrrr = args.include_hrrr)
+
         # Instantiate PrecipVerificationProcessor class
         verif = precip_verification_processor.PrecipVerificationProcessor(args.start_dt_str,
                                                                           args.end_dt_str, 
                                                                           LOAD_DATA = LOAD_DATA,
                                                                           loaded_non_subset_da_dict = loaded_non_subset_da_dict,
-                                                                          data_names = ["AORC", "CONUS404", "ERA5", "HRRR", "IMERG", "Replay"],
-                                                                          truth_data_name = "AORC",
-                                                                          data_grid = "Replay",
+                                                                          data_names = data_names, 
+                                                                          truth_data_name = truth_data_name, 
+                                                                          data_grid = data_grid, 
                                                                           temporal_res = 24,
                                                                           region = region) 
 
@@ -87,10 +102,11 @@ def main():
 
         excd_dict = {} 
         for data_name, da in verif.da_dict.items():
+            print(f"**** Dataset name {data_name}")
             data_array = utils.convert_period_end_to_period_begin(da)
             final_da_list = []
             for dtime in dtimes:
-                print(f"**** Dtime: {dtime}")
+                print(f"Dtime: {dtime}")
 
                 # Observed data
                 obs_da_sel_time_period = verif._determine_agg_data_from_time_period_type(obs_da_period_begin,
@@ -121,8 +137,6 @@ def main():
                     # Model percentile
                     da_pctl_sel_time_period = da_sel_time_period.quantile(args.pctl/100, keep_attrs = True,
                                                                           dim = utils.period_begin_time_dim_str)
-
-                print(obs_da_sel_time_period.shape, da_sel_time_period.shape, obs_pctl_sel_time_period.shape, da_pctl_sel_time_period.shape)
 
                 # Plotting
                 if (args.plot_cmaps):
