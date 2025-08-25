@@ -63,6 +63,12 @@ def main():
                                                                       region = args.region,
                                                                       temporal_res = args.temporal_res)
 
+
+    # Fix CONUS404 lat/lons, which differ very slightly from other DataArrays,
+    # likely due to use of cdo interpolation (whereas other DataArrays were interpolated with xarray)
+    verif.da_dict["CONUS404"].coords["lon"] = verif.da_dict["AORC"].lon.values
+    verif.da_dict["CONUS404"].coords["lat"] = verif.da_dict["AORC"].lat.values
+
     # Subset ARI grid to current region
     aris_region_subset = verif._subset_data_to_region(aris, data_name = "ARI_grid")
 
@@ -87,7 +93,7 @@ def main():
         # Plot cumulative ARI exceedances
         verif.plot_cmap_multi_panel(data_dict = ari_exceedance_dict, plot_levels = bounds, plot_cmap = cmap)
 
-    return verif 
+    return verif, aris_region_subset
  
 def create_ari_colorbar():
     color_list = ["white", "cyan", "blue", "green", "red", "purple"]
@@ -115,7 +121,6 @@ def calculate_ari_exceedances(da_dict, aris_region_subset, ari = 2, temporal_res
         # Add a period_end_time dimension to facilitate plotting
         end_dt = pd.Timestamp(da[utils.period_end_time_dim_str].values[-1])
         ari_exceedance_da_sum.coords[utils.period_end_time_dim_str] = [end_dt]
-        print(f"Calculating ARI exceedances ending at {end_dt:%Y%m%d.%H}")
 
         # Add relevant attributes for plotting
         pdp.add_attributes_to_data_array(ari_exceedance_da_sum,
@@ -129,4 +134,4 @@ def calculate_ari_exceedances(da_dict, aris_region_subset, ari = 2, temporal_res
     return ari_exceedance_dict
 
 if __name__ == "__main__":
-    verif = main()
+    verif, aris_region_subset = main()
