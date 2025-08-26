@@ -16,8 +16,6 @@ import sys
 import utilities as utils
 import xarray as xr
 
-# TODO: Update plot_cmap_multi_panel() to be able to handle 2-D lat/lons (e.g., for CONUS404)
-# like the similar function in precip_plotting_utilities.py
 # TODO (both low priority):
     # Figure out the source of the "All-NaN slice encountered" warning in percentile calculations
     # Update plot names to use '.' notation
@@ -177,8 +175,55 @@ class PrecipVerificationProcessor(object):
                     self.da_dict = self._create_dummy_data_dict_for_non_standard_input() 
                 self.truth_da = self.da_dict[self.truth_data_name]
 
+            print("**** Loading DataArrays")    
+            for data_name, da in self.da_dict.items():
+                print(f"Loading {data_name} data") 
+                da.load()
+
+        if self.IS_STANDARD_INPUT_DICT:
+            self._check_for_standard_dimensions()
+        else:
+            self.time_dim_name = "time" 
+            self.lat_dim_name = "lat"
+            self.lon_dim_name = "lon"
+            self.dims = (self.time_dim_name, self.lat_dim_name, self.lon_dim_name)
+
     ##### PRIVATE METHODS #####
     ############################################################################
+    # Check that time dimension is 'period_end_time'
+    # Check that south->north dimension is 'lat', 'latitude', 'y', or 'south_north'
+    # Check that west->east dimension is 'lon', 'longitude', 'x', or 'west_east'
+    def _check_for_standard_dimensions(self):
+        if (len(self.truth_da.dims) != 3):
+            print(f"Error: Must have three-dimensional grids with dimensions (time, south->north, west->east); current dims are {self.truth_da.dims}")
+            sys.exit(1)
+
+        # Check time dimension
+        if (self.truth_da.dims[0] != utils.period_end_time_dim_str):
+            print(f"Error: Only time dimension name {utils.period_end_time_dim_str} supported, not {self.truth_da.dims[0]}")
+            sys.exit(1)
+        
+        # Check south->north (lat) dimension
+        if (self.truth_da.dims[1] != "lat") and \
+           (self.truth_da.dims[1] != "latitude") and \
+           (self.truth_da.dims[1] != "y") and \
+           (self.truth_da.dims[1] != "south_north"):
+            print(f"Error: Only south->north dimension names 'lat', 'latitude', 'y', or 'south_north' supported, not {self.truth_da.dims[1]}")
+            sys.exit(1)
+
+        # Check west->east (lon) dimension
+        if (self.truth_da.dims[2] != "lon") and \
+           (self.truth_da.dims[2] != "longitude") and \
+           (self.truth_da.dims[2] != "x") and \
+           (self.truth_da.dims[2] != "west_east"):
+            print(f"Error: Only east->west dimension names 'lon', 'longitude', 'x', or 'west_east' supported, not {self.truth_da.dims[2]}")
+            sys.exit(1)
+
+        self.time_dim_name = self.truth_da.dims[0]
+        self.lat_dim_name = self.truth_da.dims[1] 
+        self.lon_dim_name = self.truth_da.dims[2]
+        self.dims = (self.time_dim_name, self.lat_dim_name, self.lon_dim_name)
+
     def _create_dummy_data_dict_for_non_standard_input(self):
         da_dict = {}
         da = xr.DataArray(np.arange(10))
@@ -245,7 +290,10 @@ class PrecipVerificationProcessor(object):
         # 24-hour precip is the beginning of the second day). 
         if (self.temporal_res == 24):
             self.valid_dt_list = self.valid_daily_dt_list[1:]
-        elif (self.temporal_res == 3) or (self.temporal_res == 1):
+        elif (self.temporal_res == 12) or \
+             (self.temporal_res ==  6) or \
+             (self.temporal_res ==  3) or \
+             (self.temporal_res ==  1):
             current_dt = self.start_dt
             self.valid_dt_list = [current_dt]
             while (current_dt != self.end_dt):
@@ -652,12 +700,11 @@ class PrecipVerificationProcessor(object):
         # Process agg_type: determine which dimension(s) to aggregate over
         match agg_type:
             case "space": # Is this even needed? It would be (for example), a spatial mean at each valid time
-                agg_dims = ("lat", "lon")
-                raise NotImplementedError
+                agg_dims = (self.lat_dim_name, self.lon_dim_name)
             case "time":
                 agg_dims = (utils.period_begin_time_dim_str)
             case "space_time":
-                agg_dims = (utils.period_begin_time_dim_str, "lat", "lon")
+                agg_dims = (utils.period_begin_time_dim_str, self.lat_dim_name, self.lon_dim_name) 
 
         # Process stat_type: eventual attributes of aggregated data arrays
         short_name = self.truth_da.short_name
@@ -1711,6 +1758,8 @@ class PrecipVerificationProcessor(object):
             # Loop through each of the subplot axes defined above (one axis for each DataArray) and plot the data 
             for axis, (data_name, da) in zip(axes_list, data_dict.items()):
                 pputils.add_cartopy_features_to_map_proj(axis, self.region, proj, draw_labels = False)
+        
+                xy_coords = pputils.determine_xy_coordinates(da)
 
                 if (plot_errors) and (data_name != self.truth_data_name):
                     data_to_plot = (da - truth_da).loc[loc_str]
@@ -1728,6 +1777,7 @@ class PrecipVerificationProcessor(object):
                 # One colorbar for entire figure; add as its own separate axis defined using subplot2grid 
                 if single_colorbar:
                     plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = extend_kwarg, cmap = cmap,
+                                                    x = xy_coords.x, y = xy_coords.y, 
                                                     add_colorbar = not(single_colorbar))
                     cbar = fig.colorbar(plot_handle, cax = cbar_ax, ticks = plot_levels, shrink = 0.5, orientation = "horizontal")
                     cbar.set_label(da.units, size = 15)
@@ -1737,6 +1787,7 @@ class PrecipVerificationProcessor(object):
                 # Separate colorbar for each subplot
                 else:
                     plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = extend_kwarg, cmap = cmap,
+                                                    x = xy_coords.x, y = xy_coords.y,
                                                     cbar_kwargs = {"shrink": 0.6, "ticks": plot_levels, "pad": 0.02, "orientation": "horizontal"})
                     plot_handle.colorbar.set_label(da.units, size = 15, labelpad = -1.3)
                     cbar_tick_labels = pputils.create_sparse_cbar_ticks(plot_levels) # 20241126: Label every other tick on subplot colorbars
@@ -1893,7 +1944,7 @@ class PrecipVerificationProcessor(object):
         plt.tight_layout()
 
         # Calculate basic statistics and annotate on the plot 
-        print("Calculating statistics to annotate to timeseries plot")
+        print("Calculating statistics to annotate timeseries plot")
         if (num_da < 3):
             ann_pos_step = 0.40
             ann_size = 15
@@ -2089,8 +2140,8 @@ class PrecipVerificationProcessor(object):
     def _calculate_levels_for_cmap(self, da_dict, saturate = True):
         max_list = []
         for data_name, da in da_dict.items():
-            da_max = da.max()
-            max_list.append(da_max)
+            da_max = da.max().item()
+            max_list.append(xr.DataArray(da_max))
         max_da = xr.concat(max_list, dim = "x")
 
         # 20241015: Changed from taking the max of the max of each data array to the

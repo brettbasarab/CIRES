@@ -52,6 +52,14 @@ replay_grid_cell_size = 0.234375
 # AORC native grid cell size in degrees
 aorc_grid_cell_size = 0.033332
 
+# Nested Eagle ~15km grid cell size
+nested_eagle_mean_lon_step = 0.16802844
+nested_eagle_mean_lat_step = 0.13105997
+
+# Take the mean of the lat and lon steps, then subsequently the mean of those values
+# Comes out very close to 0.15
+nested_eagle_grid_cell_size = 0.5 * (nested_eagle_mean_lon_step + nested_eagle_mean_lat_step)
+
 # Radius, ARIs (in years), amount, and percentile thresholds for various
 # types of evaluations; typically used for FSS and occurence stats (like frequency bias)
 

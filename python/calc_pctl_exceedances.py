@@ -34,7 +34,7 @@ def main():
     parser.add_argument("--pctl", dest = "pctl", type = float, default = 99,
                         help = "Percentile to use for exceedances; default 99th")
     parser.add_argument("--time_period_type", dest = "time_period_type", default = "monthly",
-                        choices = ["monthly", "seasonal"],
+                        choices = ["daily", "monthly", "seasonal"],
                         help = "Time period type: monthly, seasonal, etc.; default  monthly")
     parser.add_argument("--plot_cmaps", dest = "plot_cmaps", action = "store_true", default = False,
                         help = "Set to plot contour maps of percentiles for each time period, and percentile exceedances")
@@ -151,12 +151,10 @@ def main():
                     if (data_name == "AORC"):
                         pputils.plot_cmap_single_panel(obs_pctl_sel_time_period, 
                                                        f"{data_name}.obs_pctl.{dt_str}",
-                                                       f"{data_name}.obs_pctl.{dt_str}",
                                                        region,
                                                        plot_levels = np.arange(0, 62, 2))
                     else:
                         pputils.plot_cmap_single_panel(da_pctl_sel_time_period, 
-                                                       f"{data_name}.da_pctl.{dt_str}",
                                                        f"{data_name}.da_pctl.{dt_str}",
                                                        region,
                                                        plot_levels = np.arange(0, 62, 2))
