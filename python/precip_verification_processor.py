@@ -118,12 +118,17 @@ class PrecipVerificationProcessor(object):
         # If data are on the Replay grid, longitudes go from 0 to 360,
         # rather than -180  to 180, and the latitude coordinates are flipped,
         # i.e., they go from +90 to -90 (north to south).
+        # Potential FIXME: Is there a way to generalize setting this flag rather than hard-coding
+        # in the grid names that have 0->360 longitudes?
+        self.LONS_360_FLAG = False 
+        self.LATS_FLIP_FLAG = False
         if (self.data_grid == "Replay"):
             self.LONS_360_FLAG = True 
             self.LATS_FLIP_FLAG = True 
-        else:
-            self.LONS_360_FLAG = False 
+        elif (self.data_grid == "NestedEagle"):
+            self.LONS_360_FLAG = True 
             self.LATS_FLIP_FLAG = False
+
         self._set_region_info(region, region_extent)
 
         # If plots are for a poster, increase the fontsize of plot titles, axes labels, etc. 
@@ -671,11 +676,11 @@ class PrecipVerificationProcessor(object):
         return number_of_correct_negatives
 
     def how_to_calculate_aggregated_stats(self):
-        print("NOTE: If input_da_dict is None, self.da_dict will be used.")
-
         print('calculate_aggregated_stats(input_da_dict = None, time_period_type = None\n'
               '                           agg_type = "space_time", stat_type = "mean",\n'
-              '                           pctl = 99, write_to_nc = False)')
+              '                           pctl = 99, write_to_nc = False)\n')
+        print("NOTE:\n"
+              "If input_da_dict is None, self.da_dict will be aggregated according to time_period_type, agg_type, and stat_type.")
 
     # Calculate statistics valid for data aggregated in space, time, or space and time. Currently
     # only mean and percentile stats are supported. 
@@ -1685,14 +1690,16 @@ class PrecipVerificationProcessor(object):
         plt.savefig(fig_path)
 
     def how_to_plot_cmap_multi_panel(self):
-        print("NOTE: If data_dict is passed it will be used directly, without aggregation using time_period_type.\n"
-              "So, the contents of data_dict must already be properly aggregated for desired cmaps.\n"
-              "If data_dict = None, self.da_dict will be used with aggregation according to time_period_type and stat_type.\n")
-
         print('plot_cmap_multi_panel(data_dict = None, plot_levels = np.arange(0, 85, 5),\n'
               '                      time_period_type = None, stat_type = "mean", pctl = 99,\n'
               '                      single_colorbar = True, single_set_of_levels = True, cmap = pputils.DEFAULT_PRECIP_CMAP,\n'
-              '                      plot_errors = False, write_to_nc = False)')
+              '                      plot_errors = False, write_to_nc = False)\n')
+        print("NOTE:\n"
+              "If data_dict is not None it will be used directly, without aggregation using time_period_type.\n"
+              "So in this case, the contents of data_dict must already be properly aggregated for desired contour maps.\n"
+              "If data_dict = None and self.USE_EXTERNAL_DA_DICT = False, self.da_dict will be aggregated, then plotted, according to time_period_type and stat_type.\n"
+              "If data_dict = None and self.USE_EXTERNAL_DA_DICT = True, self.da_dict will be used directly.\n"
+              "So in the latter case, it's better to calculate data_dict with desired aggregation separately and pass it to plot_cmap_multi_panel().")
 
     # Contour maps with the correct number of panels, with the "truth" dataset always in the top left
     # The input da_dict must have the same contents as self.data_dict: {da_name1: da1, ...., da_nameN, daN}
@@ -1824,12 +1831,14 @@ class PrecipVerificationProcessor(object):
             plt.savefig(fig_path)
 
     def how_to_plot_timeseries(self):
-        print("NOTE: If data_dict is passed it will be used directly, without aggregation using time_period_type.\n"
-              "So, the contents of data_dict must already be properly aggregated for a time series.\n"
-              "If data_dict = None, self.da_dict will be used with aggregation according to time_period_type and stat_type.\n")
-
         print('plot_timeseries(data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, plot_levels = None, \n'
-              '                write_to_nc = False, ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True)')
+              '                write_to_nc = False, ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True)\n')
+        print("NOTE:\n"
+              "If data_dict is not None it will be used directly, without aggregation using time_period_type.\n"
+              "So the contents of data_dict must already be properly aggregated for a time series.\n"
+              "If data_dict = None and self.USE_EXTERNAL_DA_DICT = False, self.da_dict will be aggregated, then plotted, according to time_period_type and stat_type.\n"
+              "If data_dict = None and self.USE_EXTERNAL_DA_DICT = True, self.da_dict will be used directly.\n"
+              "So in the latter case, it's better to calculate data_dict with desired aggregation separately and pass it to plot_timeseries().")
 
     def plot_timeseries(self, data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, plot_levels = None,
                         write_to_nc = False, ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True):

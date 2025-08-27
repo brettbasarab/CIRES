@@ -10,10 +10,6 @@ import sys
 import utilities as utils
 import xarray as xr
 
-# TODO:
-    # Fix masking to correctly get datasets on same grid without spatial shift 
-    # Fix timeseries in PrecipVerificationProcessor: doesn't take mean correctly
-
 utils.suppress_warnings()
 
 data_names = ["AORC", "GFS", "HRRR", "NestedEagle"]
@@ -69,22 +65,34 @@ nested["valid_time"] = calc_valid_time(nested)
 nested.coords["valid_time"] = nested.valid_time
 
 # Trim the mask to the Nested Eagle domain
-trimmed_mask = mask.isel(x  = slice(10,-11), y = slice(10,-11))
+trimmed_mask = mask.isel(x = slice(10, -11), y = slice(10, -11))
 trimmed_mask["x"] = np.arange(len(nested.x))
 trimmed_mask["y"] = np.arange(len(nested.y))
+
+# Trim the other datasets to the NestedEagle domain
+trimmed_ds_dict = {}
+for data_name, xds in ds_dict.items():
+    if ("Nested" not in data_name):
+        trimmed_xds = xds.isel(x = slice(10, -11), y = slice(10, -11))
+        trimmed_xds["x"] = np.arange(len(nested.x))
+        trimmed_xds["y"] = np.arange(len(nested.y))
+        
+        trimmed_ds_dict[data_name] = trimmed_xds
+    else:
+        trimmed_ds_dict[data_name] = xds
 
 # Extract DataArrays with time masked to Nested-Eagle grid and with
 # time dimensions renamed to 'period_end_time' 
 da_dict_tmp = {}
-for data_name, xds in ds_dict.items(): 
+for data_name, xds in trimmed_ds_dict.items(): 
     # Old masking (from Tim's notebook); makes other DataArrays a slightly different shape from NestedEagle
-    if "Nested" not in data_name:
-        da = xds.accum_tp.where(mask)
-    else:
-        da = xds.accum_tp.where(trimmed_mask)
+    #if "Nested" not in data_name:
+    #    da = xds.accum_tp.where(mask)
+    #else:
+    #    da = xds.accum_tp.where(trimmed_mask)
 
     # Mask DataArray to the slightly-trimmed Nested Eagle domain
-    #da = xds.accum_tp.where(trimmed_mask)
+    da = xds.accum_tp.where(trimmed_mask)
 
     if "fhr" in da.dims:
         da = da.sel(fhr = fhr)
@@ -107,17 +115,8 @@ for data_name, da in da_dict_tmp.items():
     if (data_name != "NestedEagle"):
         da = da.sel(period_end_time = common_period_end_times)
 
-    # Add trimmed latitude/longitude coordinates back into DataArrays
-    if "Nested" not in data_name:
-        da.coords["latitude"] = mask.latitude
-        da.coords["longitude"] = mask.longitude
-    else:
-        da.coords["latitude"] = trimmed_mask.latitude
-        da.coords["longitude"] = trimmed_mask.longitude
-
-    #da.coords["latitude"] = trimmed_mask.latitude
-    #da.coords["longitude"] = trimmed_mask.longitude
-
+    da.coords["latitude"] = trimmed_mask.latitude
+    da.coords["longitude"] = trimmed_mask.longitude
     da = da.rename({"latitude": "lat",
                     "longitude": "lon"})
     
@@ -138,8 +137,11 @@ for data_name, da in da_dict_tmp.items():
 start_dt = pd.to_datetime(da_dict["AORC"].period_end_time.values[0])
 end_dt = pd.to_datetime(da_dict["AORC"].period_end_time.values[-1])
 
-verif = pvp.PrecipVerificationProcessor(start_dt.strftime("%Y%m%d.%H"),
-                                        end_dt.strftime("%Y%m%d.%H"),
+start_dt_str = start_dt.strftime("%Y%m%d.%H")
+end_dt_str = end_dt.strftime("%Y%m%d.%H")
+
+verif = pvp.PrecipVerificationProcessor(start_dt_str,
+                                        end_dt_str, 
                                         LOAD_DATA = False, 
                                         loaded_non_subset_da_dict = False, 
                                         USE_EXTERNAL_DA_DICT = True,
@@ -149,4 +151,51 @@ verif = pvp.PrecipVerificationProcessor(start_dt.strftime("%Y%m%d.%H"),
                                         truth_data_name = truth_data_name,
                                         data_grid = "NestedEagle",
                                         region = "CONUS", 
-                                        temporal_res = 6) 
+                                        temporal_res = 6)
+
+
+##### Regional stats #####
+# US-WestCoast
+west_coast_region_mask = ppu.create_west_coast_states_mask(verif.truth_da)
+
+west_coast_da_dict = {}
+for data_name, da in verif.da_dict.items():
+    # Mask
+    west_coast_da_dict[data_name] = da.where(west_coast_region_mask)
+
+verif_west_coast = pvp.PrecipVerificationProcessor(start_dt_str,
+                                                   end_dt_str, 
+                                                   LOAD_DATA = False, 
+                                                   loaded_non_subset_da_dict = False, 
+                                                   USE_EXTERNAL_DA_DICT = True,
+                                                   IS_STANDARD_INPUT_DICT = True,
+                                                   external_da_dict = west_coast_da_dict, 
+                                                   data_names = data_names, 
+                                                   truth_data_name = truth_data_name,
+                                                   data_grid = "NestedEagle",
+                                                   region = "US-WestCoast", 
+                                                   temporal_res = 6)
+
+# US-Central
+central_region_mask = ppu.create_conus_mask(verif.truth_da)
+
+central_da_dict = {}
+for data_name, da in verif.da_dict.items():
+    # Slice
+    da = da.isel(x = slice(135, 250))
+
+    # Mask
+    central_da_dict[data_name] = da.where(central_region_mask)
+
+verif_central = pvp.PrecipVerificationProcessor(start_dt_str,
+                                                end_dt_str,
+                                                LOAD_DATA = False,
+                                                loaded_non_subset_da_dict = False,
+                                                USE_EXTERNAL_DA_DICT = True,
+                                                IS_STANDARD_INPUT_DICT = True,
+                                                external_da_dict = central_da_dict,
+                                                data_names = data_names,
+                                                truth_data_name = truth_data_name,
+                                                data_grid = "NestedEagle",
+                                                region = "US-Central",
+                                                temporal_res = 6)
