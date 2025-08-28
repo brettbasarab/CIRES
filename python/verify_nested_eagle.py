@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -12,14 +13,19 @@ import xarray as xr
 
 utils.suppress_warnings()
 
-data_names = ["AORC", "GFS", "HRRR", "NestedEagle"]
 truth_data_name = "AORC"
-fhr = 24 # Which forecast hour to evaluate
-# t0 = "2023-03-10T06"
-# vtime = pd.Timestamp(t0) + pd.Timedelta(hours = fhr)
-# stime = str(vtime)[:13]
+grid_cell_size = utils.nested_eagle_grid_cell_size
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--fhr", dest = "fhr", type = int, default = 24, choices = [6, 12, 24, 48],
+                        help = "Forecast hour from HRRR, GFS, and NestedEagle datasets; default 24")
+    parser.add_argument("--plot", dest = "plot", action = "store_true", default = False,
+                        help = "Set to make plots")
+    parser.add_argument("--fss", dest = "fss", action = "store_true", default = False,
+                        help = "Set to calculate FSS")
+    args = parser.parse_args()
+
     # Open AORC Dataset
     aorc = xr.open_zarr("/Projects/ml_benchmarks/conus-precip-eval/15km/aorc.zarr", decode_timedelta=True)
 
@@ -42,11 +48,11 @@ def main():
     mask = xr.open_dataset("/Projects/ml_benchmarks/conus-precip-eval/15km/mask.nc")["aorc_mask"]
 
     # Create dictionary of original datasets without any modifications
+    data_names = ["AORC", "GFS", "HRRR", "NestedEagle"]
     ds_list = [aorc, gfs, hrrr, nested]
     ds_dict = {}
     for d, data_name in enumerate(data_names):
         ds_dict[data_name] = ds_list[d]
-    #ds_dict = {"AORC": aorc, "GFS": gfs, "HRRR": hrrr, "NestedEagle": nested}
 
     # Correct valid times
     gfs["valid_time"] = calc_valid_time(gfs)
@@ -89,7 +95,7 @@ def main():
         da = xds.accum_tp.where(trimmed_mask)
 
         if "fhr" in da.dims:
-            da = da.sel(fhr = fhr)
+            da = da.sel(fhr = args.fhr)
 
         if "t0" in da.dims:
             da = da.swap_dims({"t0": "valid_time"}).rename({"valid_time": "period_end_time"})
@@ -106,7 +112,7 @@ def main():
     # Create final DataArrays that will work with PrecipVerificationProcessor
     da_dict = {}
     for data_name, da in da_dict_tmp.items():
-        if (data_name != "NestedEagle"):
+        if ("NestedEagle" not in data_name):
             da = da.sel(period_end_time = common_period_end_times)
 
         da.coords["latitude"] = trimmed_mask.latitude
@@ -120,8 +126,8 @@ def main():
         
         # Add standard attributes expected by verification processor
         pdp.add_attributes_to_data_array(da,
-                                         short_name = "06-hour precipitation",
-                                         long_name = "Precipitation accumulated over the prior 6 hours",
+                                         short_name = f"06-hour precipitation fhr{args.fhr:02d}",
+                                         long_name = f"Precipitation accumulated over the prior 6 hours; forecast hour {args.fhr:02d}",
                                          units = "mm",
                                          interval_hours = 6) 
 
@@ -147,34 +153,40 @@ def main():
                                             region = "CONUS", 
                                             temporal_res = 6)
 
-    
-    plot_monthly_means(verif)
-    sys.exit(0)
-
-    ##### Regional stats #####
+    # REGIONAL STATS
     # US-WestCoast
     verif_west_coast = create_subset_region_verif_processor(verif, "US-WestCoast") 
-    plot_monthly_means(verif_west_coast) 
 
     # US-Mountain
     verif_mountain = create_subset_region_verif_processor(verif, "US-Mountain")
-    plot_monthly_means(verif_mountain) 
 
     # US-Central
     verif_central = create_subset_region_verif_processor(verif, "US-Central")
-    plot_monthly_means(verif_central) 
 
     # US-EastCoast
     verif_east = create_subset_region_verif_processor(verif, "US-East") 
-    plot_monthly_means(verif_east)
+   
+    # PLOTTING: Monthly means 
+    if args.plot:
+        plot_monthly_means(verif)
+        plot_monthly_means(verif_west_coast) 
+        plot_monthly_means(verif_mountain) 
+        plot_monthly_means(verif_central) 
+        plot_monthly_means(verif_east)
+
+    # FSS
+    if args.fss:
+        calculate_and_plot_fss(verif, plot = args.plot)
+        calculate_and_plot_fss(verif_west_coast, plot = args.plot)
+        calculate_and_plot_fss(verif_mountain, plot = args.plot)
+        calculate_and_plot_fss(verif_central, plot = args.plot)
+        calculate_and_plot_fss(verif_east, plot = args.plot)
 
     return verif, ds_dict, trimmed_ds_dict
 
 def calc_valid_time(xds):
-    lead_time = xr.DataArray(
-        [pd.Timedelta(hours=fhr) for fhr in xds.fhr.values],
-        coords=xds.fhr.coords,
-    )
+    lead_time = xr.DataArray([pd.Timedelta(hours = fhr) for fhr in xds.fhr.values],
+                             coords=xds.fhr.coords)
     return xds["t0"] + lead_time
 
 def create_subset_region_verif_processor(verif, region):
@@ -222,7 +234,7 @@ def create_subset_region_verif_processor(verif, region):
 def plot_monthly_means(verif, plot_cmaps = True, plot_errors = True):
     agg_dict_ts = verif.calculate_aggregated_stats(time_period_type = "monthly", stat_type = "mean", agg_type = "space_time")
     verif.plot_timeseries(data_dict = agg_dict_ts, time_period_type = "monthly", stat_type = "mean",
-                          plot_levels = np.arange(0, 1.8, 0.2))
+                          plot_levels = np.arange(0, 1.8, 0.2), full_short_name_in_fig_name = True)
     
     if plot_cmaps:
         agg_dict_cmaps = verif.calculate_aggregated_stats(time_period_type = "monthly", stat_type = "mean", agg_type = "time")
@@ -232,6 +244,42 @@ def plot_monthly_means(verif, plot_cmaps = True, plot_errors = True):
             verif.plot_cmap_multi_panel(data_dict = agg_dict_cmaps, time_period_type = "monthly", stat_type = "mean",
                                         plot_levels = np.arange(0, 5.5, 0.5), plot_errors = True, single_colorbar = False)
 
+def calculate_and_plot_fss(verif, plot = True):
+    # FSS by amount threshold, fixed eval radius
+    fss_threshold_mm_dict = verif.calculate_fss(eval_type = "by_threshold",
+                                                grid_cell_size = grid_cell_size,
+                                                fixed_radius = 2 * grid_cell_size,
+                                                eval_threshold_list = utils.default_eval_threshold_list_mm,
+                                                is_pctl_threshold = False)
+    if plot:
+        verif.plot_aggregated_fss(eval_type = "by_threshold", is_pctl_threshold = False, include_frequency_bias = True)
+    
+    # FSS by percentile threshold, fixed eval radius
+    fss_threshold_pctl_dict = verif.calculate_fss(eval_type = "by_threshold",
+                                                  grid_cell_size = grid_cell_size,
+                                                  fixed_radius = 2 * grid_cell_size,
+                                                  eval_threshold_list = utils.default_eval_threshold_list_mm,
+                                                  is_pctl_threshold = True)
+    if plot:
+        verif.plot_aggregated_fss(eval_type = "by_threshold", is_pctl_threshold = True)
 
+    # FSS by eval radius, fixed amount threshold
+    fss_radius_thresh_mm_dict = verif.calculate_fss(eval_type = "by_radius",
+                                                    grid_cell_size = grid_cell_size,
+                                                    fixed_threshold = 10,
+                                                    eval_radius_list = grid_cell_size * utils.default_eval_radius_list_grid_cells,
+                                                    is_pctl_threshold = False)
+    if plot:
+        verif.plot_aggregated_fss(eval_type = "by_radius", is_pctl_threshold = False)
+
+    # FSS by eval radius, fixed percentile threshold
+    fss_radius_thresh_pctl_dict = verif.calculate_fss(eval_type = "by_radius",
+                                                      grid_cell_size = grid_cell_size,
+                                                      fixed_threshold = 95.0,
+                                                      eval_radius_list = grid_cell_size * utils.default_eval_radius_list_grid_cells,
+                                                      is_pctl_threshold = True)
+    if plot:
+        verif.plot_aggregated_fss(eval_type = "by_radius", is_pctl_threshold = True)
+                        
 if __name__ == "__main__":
     verif, ds_dict, trimmed_ds_dict = main()

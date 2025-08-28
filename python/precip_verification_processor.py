@@ -460,15 +460,15 @@ class PrecipVerificationProcessor(object):
                 else:
                     region_subset_west_of_meridian = data_array.sel(lat = slice(self.lower_lat, self.upper_lat), lon = slice(self.lower_lon, 360.0)) 
                     region_subset_east_of_meridian = data_array.sel(lat = slice(self.lower_lat, self.upper_lat), lon = slice(0.0, self.upper_lon))
-                region_subset_data_array = xr.concat([region_subset_west_of_meridian, region_subset_east_of_meridian], dim = "lon")
+                region_subset_data_array = xr.concat([region_subset_west_of_meridian, region_subset_east_of_meridian], dim = self.lon_dim_name) 
 
                 # The slicing above will leave us with longitudes that go from (for example), ~340 to 360, then start over at zero. In other words,
                 # they are numerically out of order, which makes further manipulation and plotting of the array difficult.
                 # So, modify the longitudes to be increasing from negative (west of meridian) to positive (east of meridian),
                 # then reorder the data array by longitude accordingly.
-                lons_m180to180 = utils.longitude_to_m180to180(region_subset_data_array["lon"].values)
-                region_subset_data_array["lon"] = lons_m180to180
-                region_subset_data_array = region_subset_data_array.sortby("lon") 
+                lons_m180to180 = utils.longitude_to_m180to180(region_subset_data_array[self.lon_dim_name].values)
+                region_subset_data_array[self.lon_dim_name] = lons_m180to180
+                region_subset_data_array = region_subset_data_array.sortby(self.lon_dim_name) 
             else:
                 if (self.LATS_FLIP_FLAG):
                     region_subset_data_array = data_array.sel(lat = slice(self.upper_lat, self.lower_lat), lon = slice(self.lower_lon, self.upper_lon))
@@ -917,7 +917,12 @@ class PrecipVerificationProcessor(object):
             for ari in eval_ari_list: 
                 self.ari_grid_dict[ari] = self._open_ari_threshold_grid(ari)
         else: # If anything else is passed for <eval_type>, evaluate against threshold
-            print(f"**** Calculating FSS by threshold (fixed eval radius {fixed_radius} {self.fss_eval_radius_units})")
+            if is_pctl_threshold:
+                pctl_string = "pctl"
+            else:
+                pctl_string = "amount (mm)"
+
+            print(f"**** Calculating FSS by {pctl_string} threshold (fixed eval radius {fixed_radius} {self.fss_eval_radius_units})")
             self.fixed_fss_eval_radius = fixed_radius
 
             self.fss_eval_threshold_da = xr.DataArray(eval_threshold_list)
@@ -1371,7 +1376,7 @@ class PrecipVerificationProcessor(object):
     # Calculate FSS for a single spatial grid (i.e., at a single valid time).
     # Code from Craig Schwartz via Trevor Alcott. See 20250130 email from Trevor
     # which is part of thread entitled "Experience with fractions skill score?"
-    # FIXME (potentially): how are NaNs being handled. I think they are being converted to zeros by _mask_data_array_based_on_threshold
+    # FIXME (potentially): how are NaNs being handled? I think they are being converted to zeros by _mask_data_array_based_on_threshold
     # which may not be desirable. We should keep them as NaNs, but then how will that affect the FSS calculation here?
     def _calculate_fss_single_grid(self, qpf, qpe, radius, grid_cell_size, threshold,
                                    is_pctl_threshold = False, include_zeros = False):
@@ -1808,12 +1813,14 @@ class PrecipVerificationProcessor(object):
             formatted_short_name = pdp.format_short_name(truth_da)
             if plot_errors:
                 formatted_short_name += "_errors"
+            formatted_short_short_name = self._format_short_short_name(truth_da)
+
             # Create the plot title. If we're looping through individual Timestamp objects, they represent
             # the period end time of the data. Indicate this explicitly in the title.
             if (type(dtime) is pd.Timestamp):
-                title_string = f"{self.region} {self._format_short_short_name(truth_da)} ending at {dt_str}"
+                title_string = f"{self.region} {formatted_short_name} ending at {dt_str}"
             else:
-                title_string = f"{self.region} {self._format_short_short_name(truth_da)}: {dt_str}"
+                title_string = f"{self.region} {formatted_short_name}: {dt_str}"
             fig.suptitle(title_string, fontsize = 16 + self.poster_font_increase, fontweight = "bold")
             fig.tight_layout()
 
@@ -1832,7 +1839,8 @@ class PrecipVerificationProcessor(object):
 
     def how_to_plot_timeseries(self):
         print('plot_timeseries(data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, plot_levels = None, \n'
-              '                write_to_nc = False, ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True)\n')
+              '                write_to_nc = False, ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True\n'
+              '                full_short_name_in_fig_name = False)')
         print("NOTE:\n"
               "If data_dict is not None it will be used directly, without aggregation using time_period_type.\n"
               "So the contents of data_dict must already be properly aggregated for a time series.\n"
@@ -1841,7 +1849,8 @@ class PrecipVerificationProcessor(object):
               "So in the latter case, it's better to calculate data_dict with desired aggregation separately and pass it to plot_timeseries().")
 
     def plot_timeseries(self, data_dict = None, time_period_type = None, stat_type = "mean", pctl = 99, plot_levels = None,
-                        write_to_nc = False, ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True):
+                        write_to_nc = False, ann_plot = True, which_ann_text = "all", pct_errors_ann_text = True, write_stats = True,
+                        full_short_name_in_fig_name = False):
         if (data_dict is None):
             if not(self.USE_EXTERNAL_DA_DICT):
                 data_dict = self.calculate_aggregated_stats(time_period_type = time_period_type, 
@@ -1862,7 +1871,6 @@ class PrecipVerificationProcessor(object):
                 fig_name_prefix = f"{pctl:0.1f}th_pctl"
                 if (plot_levels is None):
                     yticks = pputils.variable_pctl_plot_limits("accum_precip", self.temporal_res)
-                axis_label = pdp.format_short_name(truth_da)
             case "mean": 
                 title_string = f"{stat_type.title()}, {self.region}"
                 fig_name_prefix = "mean"
@@ -1870,13 +1878,11 @@ class PrecipVerificationProcessor(object):
                     yticks = pputils.regions_info_dict[self.region].ts_mean_precip_range
                     if (time_period_type == None) or (time_period_type == "daily"):
                         yticks = 2.0 * np.copy(yticks) 
-                axis_label = self._format_short_short_name(truth_da)
             case "pctl_excd_mean":
                 title_string = f"{pctl:0.1f}th pctl exceedance mean, {self.region}"
                 fig_name_prefix = f"{pctl:0.1f}th_{stat_type}"
                 if (plot_levels is None):
                     yticks = pputils.variable_pctl_plot_limits("accum_precip", self.temporal_res)
-                axis_label = self._format_short_short_name(truth_da)
             case _:
                 raise NotImplementedError
 
@@ -1913,7 +1919,13 @@ class PrecipVerificationProcessor(object):
                 title_string = f"Common seasonal {title_string}: {time_period_str}"
                 xlabel = "Seasons"
 
-        fig_name = f"timeseries.{self.data_names_str}{fig_name_prefix}.{axis_label}.{time_period_str}.{self.region}.png"
+        
+        formatted_short_name = pdp.format_short_name(truth_da)
+        formatted_short_short_name = self._format_short_short_name(truth_da)
+        if full_short_name_in_fig_name:
+            fig_name = f"timeseries.{self.data_names_str}{fig_name_prefix}.{formatted_short_name}.{time_period_str}.{self.region}.png"
+        else:
+            fig_name = f"timeseries.{self.data_names_str}{fig_name_prefix}.{formatted_short_short_name}.{time_period_str}.{self.region}.png"
         dtimes, time_dim, dt_format = self._create_datetime_list_from_da_time_dim(truth_da)
        
         # Plot the data
@@ -1927,7 +1939,7 @@ class PrecipVerificationProcessor(object):
         plt.grid(True, linewidth = 0.3, linestyle = "dashed")
         plt.title(title_string, size = 16 + self.poster_font_increase, fontweight = "bold")
         plt.xlabel(xlabel, size = 16) 
-        plt.ylabel(f"{axis_label} [{truth_da.units}]", size = 16 + self.poster_font_increase)
+        plt.ylabel(f"{formatted_short_name} [{truth_da.units}]", size = 16 + self.poster_font_increase)
 
         if (len(dtimes) <= 60):
             xticks = dtimes
@@ -2087,7 +2099,7 @@ class PrecipVerificationProcessor(object):
             plt.xticks(xticks, fontsize = 15 + self.poster_font_increase)
             plt.ylim(yticks[0], yticks[-1])
             plt.yticks(yticks, fontsize = 15 + self.poster_font_increase)
-            title_string = f"{self._format_short_short_name(self.truth_da)} PDF, {self.region}: {dt_str}"
+            title_string = f"{pdp.format_short_name(self.truth_da)} PDF, {self.region}: {dt_str}"
             plt.title(title_string, size = 16 + self.poster_font_increase, fontweight = "bold")
             plt.tight_layout()
 
