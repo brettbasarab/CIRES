@@ -24,9 +24,12 @@ def main():
                         help = "Set to make plots")
     parser.add_argument("--fss", dest = "fss", action = "store_true", default = False,
                         help = "Set to calculate FSS")
+    parser.add_argument("--subregions", dest = "subregions", action = "store_true", default = False,
+                        help = "Set to verify additional CONUS subregions; otherwise CONUS only")
     args = parser.parse_args()
 
     # Open AORC Dataset
+    print("Reading datasets from zarr")
     aorc = xr.open_zarr("/Projects/ml_benchmarks/conus-precip-eval/15km/aorc.zarr", decode_timedelta=True)
 
     # Open GFS
@@ -50,19 +53,27 @@ def main():
     # Create dictionary of original datasets without any modifications
     data_names = ["AORC", "GFS", "HRRR", "NestedEagle"]
     ds_list = [aorc, gfs, hrrr, nested]
-    ds_dict = {}
+    ds_dict_orig = {}
     for d, data_name in enumerate(data_names):
-        ds_dict[data_name] = ds_list[d]
+        ds_dict_orig[data_name] = ds_list[d]
 
     # Correct valid times
-    gfs["valid_time"] = calc_valid_time(gfs)
-    hrrr["valid_time"] = calc_valid_time(hrrr)
-    nested["valid_time"] = calc_valid_time(nested)
+    ds_dict = {}
+    for data_name, xds in ds_dict_orig.items():
+        if ("AORC" not in data_name):
+            xds["valid_time"] = calc_valid_time(xds)
 
-    # For nested array, change valid_time from a data variable
-    # to a coordinate, so that it can subsequently be swapped with t0 and become
-    # one of the DataArray's dimensions
-    nested.coords["valid_time"] = nested.valid_time
+        # For NestedEagle, change valid_time from a data variable to a coordinate,
+        # so that it can subsequently be swapped with t0 and become one of the DataArray's dimensions
+        if ("Nested" in data_name):
+            xds.coords["valid_time"] = xds.valid_time
+
+        ds_dict[data_name] = xds
+    
+    #gfs["valid_time"] = calc_valid_time(gfs)
+    #hrrr["valid_time"] = calc_valid_time(hrrr)
+    #nested["valid_time"] = calc_valid_time(nested)
+    #nested.coords["valid_time"] = nested.valid_time
 
     # Trim the mask to the Nested Eagle domain
     trimmed_mask = mask.isel(x = slice(10, -11), y = slice(10, -11))
@@ -81,17 +92,15 @@ def main():
         else:
             trimmed_ds_dict[data_name] = xds
 
-    # Extract DataArrays with time masked to Nested-Eagle grid and with
-    # time dimensions renamed to 'period_end_time' 
-    da_dict_tmp = {}
+    # Now extract precipitation DataArrays at the given forecast hour from the Datasets. 
+    # In so doing, swap dimensions 't0' (init time) and 'valid_time' so that the time
+    # dimension will be correctly represented by valid times rather than init times.
+    # Finally, rename 'valid_time' dimension (or 'time' for AORC) to 'period_end_time'.
+    # This renaming is required for PrecipVerificationProcessor to work.
+    trimmed_da_dict = {}
     for data_name, xds in trimmed_ds_dict.items(): 
-        # Old masking (from Tim's notebook); makes other DataArrays a slightly different shape from NestedEagle
-        #if "Nested" not in data_name:
-        #    da = xds.accum_tp.where(mask)
-        #else:
-        #    da = xds.accum_tp.where(trimmed_mask)
-
         # Mask DataArray to the slightly-trimmed Nested Eagle domain
+        # TODO: This step may be redundant since we've already trimmed the Datasets in trimmed_ds_dict
         da = xds.accum_tp.where(trimmed_mask)
 
         if "fhr" in da.dims:
@@ -102,18 +111,33 @@ def main():
         else:
             da = da.rename({"time": "period_end_time"})
 
-        da_dict_tmp[data_name] = da
+        da.attrs["data_name"] = data_name
+        trimmed_da_dict[data_name] = da
 
-    # Since Nested-Eagle has the shortest time dimension, select data for the valid
-    # times from that DataArray from all the other DataArrays.
-    # These valid times should be common to all datasets.
-    common_period_end_times = da_dict_tmp["NestedEagle"].period_end_time
+    # OBSOLETE: To be deleted
+    # Since Nested-Eagle has the shortest time dimension, select data for the
+    # valid times from that DataArray from all the other DataArrays.
+    # That is, these valid times should be common to all datasets.
+    #common_period_end_times = trimmed_da_dict["NestedEagle"].period_end_time
+    #for data_name, da in trimmed_da_dict.items():
+        #if ("NestedEagle" not in data_name):
+        #    da = da.sel(period_end_time = common_period_end_times)
 
+    # Align arrays. Xarray.align is equivalent to numpy.intersect1d. This step
+    # is necessary to align along the time ('period_end_time') dimensions.
+    # NestedEagle has the shortest time dimension, AND depending on fhr the model
+    # datasets may extend beyond the last time in the AORC dataset. By using
+    # xarray.align, we select the set of time coordinates common to all datasets.
+    aorc_da = trimmed_da_dict["AORC"]
+    gfs_da = trimmed_da_dict["GFS"]
+    hrrr_da = trimmed_da_dict["HRRR"]
+    nested_da = trimmed_da_dict["NestedEagle"]
+    aligned_das = xr.align(aorc_da, gfs_da, hrrr_da, nested_da)
+    
     # Create final DataArrays that will work with PrecipVerificationProcessor
     da_dict = {}
-    for data_name, da in da_dict_tmp.items():
-        if ("NestedEagle" not in data_name):
-            da = da.sel(period_end_time = common_period_end_times)
+    for da in aligned_das: 
+        data_name = da.data_name
 
         da.coords["latitude"] = trimmed_mask.latitude
         da.coords["longitude"] = trimmed_mask.longitude
@@ -140,49 +164,52 @@ def main():
     start_dt_str = start_dt.strftime("%Y%m%d.%H")
     end_dt_str = end_dt.strftime("%Y%m%d.%H")
 
-    verif = pvp.PrecipVerificationProcessor(start_dt_str,
-                                            end_dt_str, 
-                                            LOAD_DATA = False, 
-                                            loaded_non_subset_da_dict = False, 
-                                            USE_EXTERNAL_DA_DICT = True,
-                                            IS_STANDARD_INPUT_DICT = True,
-                                            external_da_dict = da_dict, 
-                                            data_names = data_names, 
-                                            truth_data_name = truth_data_name,
-                                            data_grid = "NestedEagle",
-                                            region = "CONUS", 
-                                            temporal_res = 6)
+    verif_conus = pvp.PrecipVerificationProcessor(start_dt_str,
+                                                  end_dt_str, 
+                                                  LOAD_DATA = False, 
+                                                  loaded_non_subset_da_dict = False, 
+                                                  USE_EXTERNAL_DA_DICT = True,
+                                                  IS_STANDARD_INPUT_DICT = True,
+                                                  external_da_dict = da_dict, 
+                                                  data_names = data_names, 
+                                                  truth_data_name = truth_data_name,
+                                                  data_grid = "NestedEagle",
+                                                  region = "CONUS", 
+                                                  temporal_res = 6)
 
     # REGIONAL STATS
-    # US-WestCoast
-    verif_west_coast = create_subset_region_verif_processor(verif, "US-WestCoast") 
+    if args.subregions:
+        # US-WestCoast
+        verif_west_coast = create_subset_region_verif_processor(verif_conus, "US-WestCoast") 
 
-    # US-Mountain
-    verif_mountain = create_subset_region_verif_processor(verif, "US-Mountain")
+        # US-Mountain
+        verif_mountain = create_subset_region_verif_processor(verif_conus, "US-Mountain")
 
-    # US-Central
-    verif_central = create_subset_region_verif_processor(verif, "US-Central")
+        # US-Central
+        verif_central = create_subset_region_verif_processor(verif_conus, "US-Central")
 
-    # US-EastCoast
-    verif_east = create_subset_region_verif_processor(verif, "US-East") 
-   
+        # US-EastCoast
+        verif_east = create_subset_region_verif_processor(verif_conus, "US-East") 
+       
     # PLOTTING: Monthly means 
     if args.plot:
-        plot_monthly_means(verif)
-        plot_monthly_means(verif_west_coast) 
-        plot_monthly_means(verif_mountain) 
-        plot_monthly_means(verif_central) 
-        plot_monthly_means(verif_east)
+        plot_monthly_means(verif_conus)
+        if args.subregions:
+            plot_monthly_means(verif_west_coast) 
+            plot_monthly_means(verif_mountain) 
+            plot_monthly_means(verif_central) 
+            plot_monthly_means(verif_east)
 
     # FSS
     if args.fss:
-        calculate_and_plot_fss(verif, plot = args.plot)
-        calculate_and_plot_fss(verif_west_coast, plot = args.plot)
-        calculate_and_plot_fss(verif_mountain, plot = args.plot)
-        calculate_and_plot_fss(verif_central, plot = args.plot)
-        calculate_and_plot_fss(verif_east, plot = args.plot)
+        calculate_and_plot_fss(verif_conus, plot = args.plot)
+        if args.subregions:
+            calculate_and_plot_fss(verif_west_coast, plot = args.plot)
+            calculate_and_plot_fss(verif_mountain, plot = args.plot)
+            calculate_and_plot_fss(verif_central, plot = args.plot)
+            calculate_and_plot_fss(verif_east, plot = args.plot)
 
-    return verif, ds_dict, trimmed_ds_dict
+    return ds_dict_orig, ds_dict, trimmed_ds_dict, trimmed_da_dict, verif_conus
 
 def calc_valid_time(xds):
     lead_time = xr.DataArray([pd.Timedelta(hours = fhr) for fhr in xds.fhr.values],
@@ -258,7 +285,7 @@ def calculate_and_plot_fss(verif, plot = True):
     fss_threshold_pctl_dict = verif.calculate_fss(eval_type = "by_threshold",
                                                   grid_cell_size = grid_cell_size,
                                                   fixed_radius = 2 * grid_cell_size,
-                                                  eval_threshold_list = utils.default_eval_threshold_list_mm,
+                                                  eval_threshold_list = utils.default_eval_threshold_list_pctl,
                                                   is_pctl_threshold = True)
     if plot:
         verif.plot_aggregated_fss(eval_type = "by_threshold", is_pctl_threshold = True)
@@ -282,4 +309,4 @@ def calculate_and_plot_fss(verif, plot = True):
         verif.plot_aggregated_fss(eval_type = "by_radius", is_pctl_threshold = True)
                         
 if __name__ == "__main__":
-    verif, ds_dict, trimmed_ds_dict = main()
+    ds_dict_orig, ds_dict, trimmed_ds_dict, trimmed_da_dict, verif_conus = main()
