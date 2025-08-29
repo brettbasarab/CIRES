@@ -131,7 +131,7 @@ regions_info_dict = \
                 region_extent = [-95, -75, 24, 37], 
                 figsize_sp = (15, 11), 
                 figsize_2p = (10, 7), 
-                figsize_mp = (15, 11), 
+                figsize_mp = (15, 10.5), 
                 figsize_mp_5plus = (15, 9.5),
                 cm_mean_precip_range = np.arange(0, 6.5, 0.5), 
                 ts_mean_precip_range = np.arange(0, 8.5, 0.5),
@@ -841,12 +841,12 @@ def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arang
 def how_to_plot_cmap_multi_panel():
     print('plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.arange(0, 85, 5),\n'
           '                      short_name = "precip_data", single_colorbar = True, sparse_cbar_ticks = False,\n'
-          '                      cmap = DEFAULT_PRECIP_CMAP)')
+          '                      cmap = DEFAULT_PRECIP_CMAP, extend = "both")')
 
 # Contour maps with the correct number of panels, with the "truth" dataset always in the top left
 def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.arange(0, 85, 5),
                           short_name = "precip_data", single_colorbar = True, sparse_cbar_ticks = False,
-                          cmap = DEFAULT_PRECIP_CMAP):
+                          cmap = DEFAULT_PRECIP_CMAP, extend = "both"):
     # Configure basic info about the data
     truth_da = data_dict[truth_data_name]
     num_da = len(data_dict.items())
@@ -897,7 +897,7 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.a
 
             # One colorbar for all subplots on figure; add as its own separate axis defined using subplot2grid 
             if single_colorbar:
-                plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
+                plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = extend, cmap = cmap,
                                                 x = xy_coords.x, y = xy_coords.y, 
                                                 add_colorbar = not(single_colorbar))
                 cbar = fig.colorbar(plot_handle, cax = cbar_ax, ticks = plot_levels, shrink = 0.5, orientation = "horizontal")
@@ -907,7 +907,7 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.a
                 cbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
             # Separate colorbar for each subplot
             else:
-                plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = "both", cmap = cmap,
+                plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = extend, cmap = cmap,
                                                 x = xy_coords.x, y = xy_coords.y,
                                                 cbar_kwargs = {"shrink": 0.6, "ticks": plot_levels, "pad": 0.02, "orientation": "horizontal"})
                 plot_handle.colorbar.set_label(da.units, size = 15, labelpad = -1.3)
@@ -920,7 +920,6 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.a
                 plot_handle.colorbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
             axis.set_title(data_name, fontsize = 16)
 
-       
         # Determine short_name, a short descriptor of the data to use in plot title and figure name
         # Use the keyword arg first, otherwise try to get the short name from the data array attributes.
         if (type(short_name) is str) and (short_name != ""):
