@@ -2,6 +2,7 @@
 
 import argparse
 import cf_xarray as cfxr
+import datetime as dt
 import matplotlib.pyplot as plt
 import numpy as np
 import precip_data_processors as pdp
@@ -24,7 +25,7 @@ def main():
                            "\tAORC: YYYYmmdd.HH and PERIOD-ENDING\n"
                            "\tCONUS404: YYYYmmdd.HH and PERIOD-ENDING\n"
                            "\tERA5: YYYYmmdd.HH and PERIOD-BEGINNING\n"
-                           "\tIMERG: YYYYmmdd.HH[00,30] and PERIOD-BEGINNING\n"
+                           "\tIMERG: YYYYmmdd and PERIOD-BEGINNING (read daily netCDF files on IMERG native grid)\n"
                            "\tReplay: YYYYmmdd.HH and PERIOD-ENDING\n")
     print(program_description)
     parser = argparse.ArgumentParser()
@@ -91,10 +92,44 @@ def main():
                                               region = args.region)
             input_da = processor.get_precip_data(spatial_res = "native", temporal_res = args.temporal_res, load = True)
         case "IMERG":
-            processor = pdp.ImergDataProcessor(args.start_dt_str,
-                                               args.end_dt_str,
-                                               region = args.region)
-            input_da = processor.get_precip_data(spatial_res = "native", temporal_res = args.temporal_res, load = True)
+            # IMERG native data won't load (within a reasonable time) in xesmf environment. So, 
+            # interpolate IMERG data at desired temporal resolution on native grid previously created in default bbasarab_env environment.
+            #processor = pdp.ImergDataProcessor(args.start_dt_str,
+            #                                   args.end_dt_str,
+            #                                   region = args.region)
+            #input_da = processor.get_precip_data(spatial_res = "native", temporal_res = args.temporal_res, load = True)
+
+            start_dt = dt.datetime.strptime(args.start_dt_str, "%Y%m%d")
+            end_dt = dt.datetime.strptime(args.end_dt_str, "%Y%m%d")
+            current_dt = start_dt
+            valid_dt_list = [current_dt]
+            while (current_dt != end_dt):
+                current_dt += dt.timedelta(days = 1)
+                valid_dt_list.append(current_dt)
+            #valid_daily_dt_list_period_begin = [dtime - dt.timedelta(days = 1) for dtime in valid_daily_dt_list[1:]]
+
+            # Collect netCDF file list
+            fname_prefix = f"{args.ds_name}.{native_grid_str}.{args.temporal_res:02d}_hour_precipitation"
+            file_list = []
+            for dtime in valid_dt_list:
+                fname = f"{fname_prefix}.{dtime:%Y%m%d}.nc"
+                fpath = os.path.join(utils.data_nc_dir, fname_prefix, fname)
+                if (not os.path.exists(fpath)):
+                    print(f"Warning: Input file path {fpath} does not exist; not including in input file list")
+                    continue
+                file_list.append(fpath)
+
+            if (len(file_list) == 0):
+                print(f"Error: No input files found in directory {fname_prefix}; can't proceed with verification")
+                sys.exit(1)
+
+            # Read multi-file dataset
+            dataset = xr.open_mfdataset(file_list)
+            input_da = dataset[f"precipitation_{args.temporal_res:02d}_hour"]
+            input_da.attrs["data_name"] = args.ds_name
+
+            # Index obs data array to correct datetime range
+            input_da = input_da.loc[start_dt.strftime(utils.full_date_format_str):end_dt.strftime(utils.full_date_format_str)]
         case "NestedReplay":
             processor = pdp.NestedReplayDataProcessor(args.start_dt_str,
                                                       args.end_dt_str,
@@ -124,19 +159,20 @@ def main():
     # Plotting
     if args.plot:
         print("Plotting")
+        short_name = f"{args.temporal_res:02d}_hour_precipitation"
 
         # Native grid
         pputils.plot_cmap_single_panel(input_da,
                                        f"xesmf.{args.ds_name}.{native_grid_str}",
-                                       f"xesmf.{args.ds_name}.{native_grid_str}",
                                        args.region,
+                                       short_name = short_name, 
                                        plot_levels = np.arange(0, 42, 2))
 
         # Output grid 
         pputils.plot_cmap_single_panel(output_da,
                                        f"xesmf.{args.interp_method}.{args.ds_name}.{output_grid_string}",
-                                       f"xesmf.{args.interp_method}.{args.ds_name}.{output_grid_string}",
                                        args.region,
+                                       short_name = short_name, 
                                        plot_levels = np.arange(0, 42, 2))
 
     return input_da, output_da
