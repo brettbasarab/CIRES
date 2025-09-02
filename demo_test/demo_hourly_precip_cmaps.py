@@ -81,7 +81,6 @@ for data_name in args.data_names_list:
 
     da_dict[data_name] = da
 
-
 # Temporally interpolate ERA5 3-hourly data to hourly
 # Put in loop in case we don't have ERA5 data: in this case this step will just be skipped 
 for data_name, da in da_dict.items():
@@ -94,7 +93,6 @@ for data_name, da in da_dict.items():
                                          long_name = "Precipitation accumulated over the prior 1 hour(s)",
                                          interval_hours = 1)
 
-
 # Instantiate PrecipVerificationProcessor class with USE_EXTERNAL_DA_DICT = True
 verif = pvp.PrecipVerificationProcessor(args.start_dt_str, args.end_dt_str,
                                         LOAD_DATA = False,
@@ -106,14 +104,10 @@ verif = pvp.PrecipVerificationProcessor(args.start_dt_str, args.end_dt_str,
                                         temporal_res = 1)
 
 # Plot contour maps
-#verif.plot_cmap_multi_panel(data_dict = verif.da_dict, plot_levels = plot_levels)
+#verif.plot_cmap_multi_panel(data_dict = verif.da_dict, plot_levels = plot_levels, extend = "max")
 
-# SINGLE TIME
-#da_dict_single_time = {}
-#for data_name, da in da_dict.items():
-#    da_dict_single_time[data_name] = da[:1,:,:]
-
-# USING FUNCTIONS FROM precip_plotting_utilities.py
-ppu.plot_cmap_multi_panel(da_dict, truth_data_name, args.region, plot_levels = plot_levels,
-                          extend = "max",
-                          short_name = "01_hour_precipitation")
+# Use functions from precip_plotting_utilities.py
+ppu.plot_cmap_multi_panel(da_dict, truth_data_name, args.region,
+                          plot_levels = plot_levels,
+                          short_name = "01_hour_precipitation",
+                          extend = "max")

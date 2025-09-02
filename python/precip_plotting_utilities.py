@@ -694,9 +694,39 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
                             ]
         case _:
             print("Error: create_gridded_subplots not currently configured to handle {num_da}-paneled subplot")
-            return
-
+            sys.exit(1)
+   
     return axes_list, cbar_ax
+
+# FIXME: Doesn't position colorbar axis correctly; check numbers and math
+def create_cbar_axis_based_on_subplot_axes(fig, num_subplots, axes_list):
+    if (num_subplots == 1) or (num_subplots == 3) or (num_subplots == 6):
+        axis = axes_list[-1]
+        axis_position = axis.get_position()
+
+        cbar_axis_width = (axis_position.x1 - axis_position.x0) + 0.08 
+        cbar_ax = fig.add_axes([axis_position.x0 - 0.04,
+                                axis_position.y0 - 0.08, 
+                                cbar_axis_width, 
+                                0.04])
+    elif (num_subplots == 2) or (num_subplots == 4) or (num_subplots == 5):
+        axis_left = axes_list[num_subplots - 2]
+        axis_right = axes_list[num_subplots - 1]
+        axis_left_position = axis_left.get_position()
+        axis_right_position = axis_right.get_position()
+        axis_left_midpoint = 0.5 * (axis_left_position.x1 + axis_left_position.x0)
+        axis_right_midpoint = 0.5 * (axis_right_postion.x1 + axis_right_position.x0)
+
+        cbar_axis_width = axis_right_midpoint -  axis_left_midpoint 
+        cbar_ax = fig.add_axes([axis_left_midpoint,
+                                axis_right.y0 - 0.08,
+                                cbar_axis_width, 
+                                0.04])
+    else:
+        print(f"Error: Colorbar axes for {num_subplots}-paneled subplot not yet supported")
+        sys.exit(1)
+
+    return cbar_ax
 
 def set_figsize_based_on_num_da(num_da, region, single_colorbar = True):
     if (num_da == 1):
@@ -749,11 +779,13 @@ def determine_if_has_time_dim(data_array):
 
 def how_to_plot_cmap_single_panel():
     print('plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arange(0, 85, 5),\n'
-          '                       short_name = "precip_data", proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP)')
+          '                       short_name = "precip_data", proj_name = "PlateCarree",\n'
+          '                       cmap = DEFAULT_PRECIP_CMAP, extend = both)')
 
 # For each time in the data array, create a single-paneled contour plot of precipitation
 def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arange(0, 85, 5),
-                           short_name = "precip_data", proj_name = "PlateCarree", cmap = DEFAULT_PRECIP_CMAP):
+                           short_name = "precip_data", proj_name = "PlateCarree",
+                           cmap = DEFAULT_PRECIP_CMAP, extend = "both"):
     match proj_name:
         case "LambertConformal":
             map_proj = ccrs.LambertConformal()
@@ -796,7 +828,9 @@ def plot_cmap_single_panel(data_array, data_name, region, plot_levels = np.arang
         add_cartopy_features_to_map_proj(axis, region, data_proj, draw_labels = False)
 
         # Plot the data
-        plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, extend = "both", transform = data_proj, cmap = cmap,
+        if (extend != "min") and (extend != "max") and (extend != "both"):
+            extend = "both"
+        plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, extend = extend, transform = data_proj, cmap = cmap,
                                         x = xy_coords.x, y = xy_coords.y, 
                                         cbar_kwargs = {"orientation": "horizontal", "ticks": plot_levels})
 
@@ -882,7 +916,10 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.a
             return 
 
         fig = plt.figure(figsize = figsize)
-        axes_list, cbar_ax = create_gridded_subplots(num_da, proj, single_colorbar = single_colorbar) 
+        axes_list, cbar_ax = create_gridded_subplots(num_da, proj, single_colorbar = single_colorbar)
+        #cbar_ax = create_cbar_axis_based_on_subplot_axes(fig, num_da, axes_list) 
+        if (extend != "min") and (extend != "max") and (extend != "both"):
+            extend = "both"
   
         # Loop through each of the subplot axes defined above (one axis for each DataArray) and plot the data 
         for axis, (data_name, da) in zip(axes_list, data_dict.items()):

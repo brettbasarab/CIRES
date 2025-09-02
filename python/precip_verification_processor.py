@@ -286,7 +286,10 @@ class PrecipVerificationProcessor(object):
         while (current_daily_dt != end_daily_dt):
             current_daily_dt += dt.timedelta(days = 1)
             self.valid_daily_dt_list.append(current_daily_dt)
-        self.valid_daily_dt_list_period_begin = [dtime - dt.timedelta(days = 1) for dtime in self.valid_daily_dt_list[1:]]
+        if (len(self.valid_daily_dt_list) > 1):
+            self.valid_daily_dt_list_period_begin = [dtime - dt.timedelta(days = 1) for dtime in self.valid_daily_dt_list[1:]]
+        else:
+            self.valid_daily_dt_list_period_begin = self.valid_daily_dt_list 
         self.daily_time_period_str = f"{self.valid_daily_dt_list[0]:%Y%m%d}-{self.valid_daily_dt_list[-1]:%Y%m%d}"
         self.daily_time_period_str_period_begin = f"{self.valid_daily_dt_list_period_begin[0]:%Y%m%d}-{self.valid_daily_dt_list_period_begin[-1]:%Y%m%d}"
 
@@ -1697,7 +1700,8 @@ class PrecipVerificationProcessor(object):
     def how_to_plot_cmap_multi_panel(self):
         print('plot_cmap_multi_panel(data_dict = None, plot_levels = np.arange(0, 85, 5),\n'
               '                      time_period_type = None, stat_type = "mean", pctl = 99,\n'
-              '                      single_colorbar = True, single_set_of_levels = True, cmap = pputils.DEFAULT_PRECIP_CMAP,\n'
+              '                      single_colorbar = True, single_set_of_levels = True,\n'
+              '                      extend = "both", cmap = pputils.DEFAULT_PRECIP_CMAP,\n'
               '                      plot_errors = False, write_to_nc = False)\n')
         print("NOTE:\n"
               "If data_dict is not None it will be used directly, without aggregation using time_period_type.\n"
@@ -1712,7 +1716,8 @@ class PrecipVerificationProcessor(object):
     # with the proper time dimensions, as this method will make a plot for each coordinate of the time dimension.
     def plot_cmap_multi_panel(self, data_dict = None, plot_levels = np.arange(0, 85, 5),
                               time_period_type = None, stat_type = "mean", pctl = 99,
-                              single_colorbar = True, single_set_of_levels = True, plot_cmap = pputils.DEFAULT_PRECIP_CMAP, 
+                              single_colorbar = True, single_set_of_levels = True,
+                              extend = "both", plot_cmap = pputils.DEFAULT_PRECIP_CMAP, 
                               plot_errors = False, write_to_nc = False):
         if (data_dict is None):
             if not(self.USE_EXTERNAL_DA_DICT): 
@@ -1778,17 +1783,18 @@ class PrecipVerificationProcessor(object):
                     plot_levels = error_levels
                     subplot_title = f"{data_name} errors"
                     cmap = "seismic_r"
-                    extend_kwarg = "both"
+                    extend = "both" # Need to extend colorbar in both directions for error cmaps
                 else:
                     data_to_plot = da.loc[loc_str]
                     plot_levels = levels
                     subplot_title = data_name
                     cmap = plot_cmap 
-                    extend_kwarg = "both" # TODO: Get max to work (currently skews the colorbar off-center)
+                    if (extend != "min") and (extend != "max") and (extend != "both"):
+                        extend = "both"
 
                 # One colorbar for entire figure; add as its own separate axis defined using subplot2grid 
                 if single_colorbar:
-                    plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = extend_kwarg, cmap = cmap,
+                    plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = extend, cmap = cmap,
                                                     x = xy_coords.x, y = xy_coords.y, 
                                                     add_colorbar = not(single_colorbar))
                     cbar = fig.colorbar(plot_handle, cax = cbar_ax, ticks = plot_levels, shrink = 0.5, orientation = "horizontal")
@@ -1798,7 +1804,7 @@ class PrecipVerificationProcessor(object):
                     cbar.ax.tick_params(labelsize = cbar_tick_labels_fontsize)
                 # Separate colorbar for each subplot
                 else:
-                    plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = extend_kwarg, cmap = cmap,
+                    plot_handle = data_to_plot.plot(ax = axis, levels = plot_levels, transform = proj, extend = extend, cmap = cmap,
                                                     x = xy_coords.x, y = xy_coords.y,
                                                     cbar_kwargs = {"shrink": 0.6, "ticks": plot_levels, "pad": 0.02, "orientation": "horizontal"})
                     plot_handle.colorbar.set_label(da.units, size = 15, labelpad = -1.3)
