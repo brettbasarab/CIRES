@@ -700,33 +700,39 @@ def create_gridded_subplots(num_da, proj, single_colorbar = True):
 
 # FIXME: Doesn't position colorbar axis correctly; check numbers and math
 def create_cbar_axis_based_on_subplot_axes(fig, num_subplots, axes_list):
-    if (num_subplots == 1) or (num_subplots == 3) or (num_subplots == 6):
+    if (num_subplots == 1) or (num_subplots == 3):
         axis = axes_list[-1]
         axis_position = axis.get_position()
-
-        cbar_axis_width = (axis_position.x1 - axis_position.x0) + 0.08 
-        cbar_ax = fig.add_axes([axis_position.x0 - 0.04,
-                                axis_position.y0 - 0.08, 
-                                cbar_axis_width, 
-                                0.04])
+        
+        xposition = axis_position.x0 - 0.04
+        yposition = axis_position.y0 - 0.08
+        cbar_axis_width = (axis_position.x1 - axis_position.x0) + 0.08
     elif (num_subplots == 2) or (num_subplots == 4) or (num_subplots == 5):
         axis_left = axes_list[num_subplots - 2]
         axis_right = axes_list[num_subplots - 1]
         axis_left_position = axis_left.get_position()
         axis_right_position = axis_right.get_position()
         axis_left_midpoint = 0.5 * (axis_left_position.x1 + axis_left_position.x0)
-        axis_right_midpoint = 0.5 * (axis_right_postion.x1 + axis_right_position.x0)
+        axis_right_midpoint = 0.5 * (axis_right_position.x1 + axis_right_position.x0)
 
-        cbar_axis_width = axis_right_midpoint -  axis_left_midpoint 
-        cbar_ax = fig.add_axes([axis_left_midpoint,
-                                axis_right.y0 - 0.08,
-                                cbar_axis_width, 
-                                0.04])
+        xposition = axis_left_midpoint
+        yposition = axis_left_position.y0 - 0.08
+        cbar_axis_width = axis_right_midpoint - axis_left_midpoint 
+    elif (num_subplots == 6):
+        axis = axes_list[-2]
+        axis_position = axis.get_position()
+
+        xposition = axis_position.x0 - 0.04
+        yposition = axis_position.y0 - 0.08
+        cbar_axis_width = (axis_position.x1 - axis_position.x0) + 0.08 
     else:
         print(f"Error: Colorbar axes for {num_subplots}-paneled subplot not yet supported")
         sys.exit(1)
 
-    return cbar_ax
+    return fig.add_axes([xposition, # Lower left horizontal position
+                         yposition, # Lower left vertical position
+                         cbar_axis_width, # Width in x (horizontal) direction 
+                         0.04]) # Height in y (vertical) direction
 
 def set_figsize_based_on_num_da(num_da, region, single_colorbar = True):
     if (num_da == 1):
