@@ -70,11 +70,6 @@ def main():
 
         ds_dict[data_name] = xds
     
-    #gfs["valid_time"] = calc_valid_time(gfs)
-    #hrrr["valid_time"] = calc_valid_time(hrrr)
-    #nested["valid_time"] = calc_valid_time(nested)
-    #nested.coords["valid_time"] = nested.valid_time
-
     # Trim the mask to the Nested Eagle domain
     trimmed_mask = mask.isel(x = slice(10, -11), y = slice(10, -11))
     trimmed_mask["x"] = np.arange(len(nested.x))
@@ -177,20 +172,26 @@ def main():
                                                   region = "CONUS", 
                                                   temporal_res = 6)
 
+    verif_dict = {"CONUS": verif_conus}
+
     # REGIONAL STATS
     if args.subregions:
         # US-WestCoast
-        verif_west_coast = create_subset_region_verif_processor(verif_conus, "US-WestCoast") 
+        verif_west_coast = create_subset_region_verif_processor(verif_conus, "US-WestCoast")
+        verif_dict["US-WestCoast"] = verif_west_coast 
 
         # US-Mountain
         verif_mountain = create_subset_region_verif_processor(verif_conus, "US-Mountain")
+        verif_dict["US-Mountain"] = verif_mountain
 
         # US-Central
         verif_central = create_subset_region_verif_processor(verif_conus, "US-Central")
+        verif_dict["US-Central"] = verif_central
 
         # US-EastCoast
-        verif_east = create_subset_region_verif_processor(verif_conus, "US-East") 
-       
+        verif_east = create_subset_region_verif_processor(verif_conus, "US-East")
+        verif_dict["US-East"] = verif_east
+
     # PLOTTING: Monthly means 
     if args.plot:
         plot_monthly_means(verif_conus)
@@ -209,7 +210,7 @@ def main():
             calculate_and_plot_fss(verif_central, plot = args.plot)
             calculate_and_plot_fss(verif_east, plot = args.plot)
 
-    return ds_dict_orig, ds_dict, trimmed_ds_dict, trimmed_da_dict, verif_conus
+    return ds_dict_orig, ds_dict, trimmed_ds_dict, trimmed_da_dict, verif_dict
 
 def calc_valid_time(xds):
     lead_time = xr.DataArray([pd.Timedelta(hours = fhr) for fhr in xds.fhr.values],
@@ -307,6 +308,45 @@ def calculate_and_plot_fss(verif, plot = True):
                                                       is_pctl_threshold = True)
     if plot:
         verif.plot_aggregated_fss(eval_type = "by_radius", is_pctl_threshold = True)
-                        
+    
+def create_subset_time_verif_processor(verif, sel_string):
+    da_dict = {}
+    for data_name, da in verif_west.da_dict.items():
+      da_dict[data_name] = da.sel(period_end_time = sel_string)
+
+    start_dt = pd.Timestamp(da_dict["AORC"].period_end_time.values[0])
+    end_dt = pd.Timestamp(da_dict["AORC"].period_end_time.values[-1])
+
+    return pvp.PrecipVerificationProcessor(start_dt.strftime("%Y%m%d.%H"),
+                                           end_dt.strftime("%Y%m%d.%H"),
+                                           LOAD_DATA = False,
+                                           USE_EXTERNAL_DA_DICT = True,
+                                           external_da_dict = da_dict,
+                                           data_names = ["AORC", "GFS", "HRRR", "NestedEagle"],
+                                           data_grid = "NestedEagle",
+                                           region = "US-WestCoast",
+                                           temporal_res = 6)
+
+def calculate_pctl_exceedances(verif, pctl_val = 95.0):
+    period_end_times = verif.truth_da.period_end_time
+    pctl_excd_dict = {}
+    for data_name, da in verif.da_dict.items():
+        quantile_da = da.quantile(pctl_val/100.0, dim = ("y", "x"))
+        excd_da = da.where(da > quantile_da)
+        pctl_excd_dict[data_name] = excd_da
+
+        print(f"****** {data_name}")
+        #print(quantile_da)
+        for i, val in enumerate(quantile_da.values):
+            print(f"{pd.Timestamp(period_end_times.values[i]).strftime('%Y%m%d.%H')}: {val:0.3f}")
+        
+        #for vtime in period_end_times:
+        #    da_vtime = da.sel(period_end_time = vtime)
+         #   excd_da = da_vtime.where(da_vtime > da_vtime.quantile(pctl_val/100.0)
+
+    return pctl_excd_dict 
+            
+
+                    
 if __name__ == "__main__":
-    ds_dict_orig, ds_dict, trimmed_ds_dict, trimmed_da_dict, verif_conus = main()
+    ds_dict_orig, ds_dict, trimmed_ds_dict, trimmed_da_dict, verif_dict = main()

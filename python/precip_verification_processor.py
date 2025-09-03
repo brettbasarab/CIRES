@@ -855,6 +855,22 @@ class PrecipVerificationProcessor(object):
 
         return pdf_data_dict 
 
+    def how_to_calculate_fss(self):
+        print(f'calculate_fss(eval_type = [{evaluate_by_radius_kw_str}, {evaluate_by_threshold_kw_str},\n'
+              f'              {evaluate_by_radius_ari_threshold_kw_str}, {evaluate_by_ari_kw_str}],\n'
+              f'              grid_cell_size = 0.25,\n'
+              f'              fixed_radius = 0.5 [deg],\n'
+              f'              fixed_threshold = 10.0 [mm],\n'
+              f'              fixed_ari_threshold = 2 [years],\n'
+              f'              eval_radius_list = {utils.default_eval_radius_list_deg},\n'
+              f'              eval_threshold_list = {utils.default_eval_threshold_list_mm},\n'
+              f'              eval_ari_list = {utils.default_eval_ari_list_years},\n'
+              f'              time_period_type = "full_period",\n'
+              f'              radius_units = "deg",\n'
+              f'              is_pctl_threshold = False,\n'
+              f'              include_zeros = False,\n'
+              f'              write_to_nc = False')
+
     # Calculate FSS for all QPF datasets, for all valid times. Output FSS at each
     # valid time to a dictionary of DataArrays, so this dict can subsequently be
     # handled similarly to self.da_dict. The dimensions are (num_valid_times * num_eval_radii [num_thresholds]). 
@@ -874,6 +890,10 @@ class PrecipVerificationProcessor(object):
         # Process time_period_type: list of date times, dimension name, etc.
         dtimes, dim_name, time_period_str = self._process_time_period_type_to_dtimes(time_period_type)
         self.fss_eval_radius_units = radius_units
+        if is_pctl_threshold:
+            self.fss_eval_threshold_units = "pctl"
+        else:
+            self.fss_eval_threshold_units = "mm"
 
         if is_pctl_threshold:
             threshold_units = "th_pctl"
@@ -1046,6 +1066,12 @@ class PrecipVerificationProcessor(object):
             self.fss_dict_by_threshold = da_dict_fss
 
         return da_dict_fss
+
+    def how_to_calculate_aggregated_fss(self):
+        print(f'calculate_aggregated_fss(external_fss_dict = None,\n'
+              f'                         eval_type = [{evaluate_by_radius_kw_str}, {evaluate_by_threshold_kw_str},\n'
+              f'                         {evaluate_by_radius_ari_threshold_kw_str}, {evaluate_by_ari_kw_str}],\n'
+              f'                         time_period_type = "full_period")')
 
     def calculate_aggregated_fss(self, external_fss_dict = None, eval_type = evaluate_by_radius_kw_str, time_period_type = "full_period"):
         if (external_fss_dict is not None):
@@ -1661,7 +1687,7 @@ class PrecipVerificationProcessor(object):
         # Create figure 
         plt.figure(figsize = (15, 10))
         short_name = pdp.format_short_name(self.da_dict[self.truth_data_name])
-        plt.title(f"FSS time series, {self.region} {short_name} (r = {eval_radius:0.2f} {self.fss_eval_radius_units}, t = {eval_threshold:0.1f} mm): {self.daily_time_period_str}", size = 15)
+        plt.title(f"FSS time series, {self.region} {short_name} (r = {eval_radius:0.2f} {self.fss_eval_radius_units}, t = {eval_threshold:0.1f} {self.fss_eval_threshold_units}): {self.daily_time_period_str}", size = 15)
         plt.xlabel("Period end time", size = 15)
         plt.ylabel("Fractions Skill Score (FSS)", size = 15)
         plt.xlim(self.valid_dt_list[0], self.valid_dt_list[-1])
@@ -1692,7 +1718,7 @@ class PrecipVerificationProcessor(object):
         # Save figure
         plt.tight_layout()
         plt.legend(loc = "best", prop = {"size": 15})
-        fig_name = f"FSStimeseries.{self.data_names_str}radius{eval_radius:0.2f}{self.fss_eval_radius_units}.threshold{eval_threshold:0.1f}mm.{short_name}.{self.daily_time_period_str}.{self.region}.png"
+        fig_name = f"FSStimeseries.{self.data_names_str}radius{eval_radius:0.2f}{self.fss_eval_radius_units}.threshold{eval_threshold:0.1f}{self.fss_eval_threshold_units}.{short_name}.{self.daily_time_period_str}.{self.region}.png"
         fig_path = os.path.join(self.plot_output_dir, fig_name)
         print(f"Saving {fig_path}")
         plt.savefig(fig_path)
