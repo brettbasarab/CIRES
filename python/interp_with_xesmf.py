@@ -92,13 +92,19 @@ def main():
                                               region = args.region)
             input_da = processor.get_precip_data(spatial_res = "native", temporal_res = args.temporal_res, load = True)
         case "IMERG":
-            # IMERG native data won't load (within a reasonable time) in xesmf environment. So, 
-            # interpolate IMERG data at desired temporal resolution on native grid previously created in default bbasarab_env environment.
+            # IMERG native data won't load (within a reasonable time) in xesmf_env environment. Instead,
+            # use as input previously-created IMERG netCDF files already at desired temporal resolution.
+            # These files were created in the bbasarab_env environment using process_data_to_replay_grid.py.
+            # The same procedure is followed, effectively: in this program (interp_with_xesmf.py), before regridding,
+            # we extract the precip on the native grid at the desired temporal resolution first (use of DataProcessor classes above). 
+            # In the new current implementation, the extraction at the required temporal resolution is just done separately, first. 
+
             #processor = pdp.ImergDataProcessor(args.start_dt_str,
             #                                   args.end_dt_str,
             #                                   region = args.region)
             #input_da = processor.get_precip_data(spatial_res = "native", temporal_res = args.temporal_res, load = True)
 
+            # List of daily valid datetime objects
             start_dt = dt.datetime.strptime(args.start_dt_str, "%Y%m%d")
             end_dt = dt.datetime.strptime(args.end_dt_str, "%Y%m%d")
             current_dt = start_dt
@@ -106,7 +112,6 @@ def main():
             while (current_dt != end_dt):
                 current_dt += dt.timedelta(days = 1)
                 valid_dt_list.append(current_dt)
-            #valid_daily_dt_list_period_begin = [dtime - dt.timedelta(days = 1) for dtime in valid_daily_dt_list[1:]]
 
             # Collect netCDF file list
             fname_prefix = f"{args.ds_name}.{native_grid_str}.{args.temporal_res:02d}_hour_precipitation"
