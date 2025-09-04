@@ -259,26 +259,34 @@ def create_subset_region_verif_processor(verif, region):
 
     return verif_subregion
 
-def plot_monthly_means(verif, plot_cmaps = True, plot_errors = True):
-    agg_dict_ts = verif.calculate_aggregated_stats(time_period_type = "monthly", stat_type = "mean", agg_type = "space_time")
+def plot_monthly_means(verif, plot_cmaps = True, plot_errors = True, write_to_nc = False):
+    agg_dict_ts = verif.calculate_aggregated_stats(time_period_type = "monthly", stat_type = "mean", agg_type = "space_time",
+                                                   write_to_nc = write_to_nc)
     verif.plot_timeseries(data_dict = agg_dict_ts, time_period_type = "monthly", stat_type = "mean",
                           plot_levels = np.arange(0, 1.8, 0.2), full_short_name_in_fig_name = True)
     
     if plot_cmaps:
-        agg_dict_cmaps = verif.calculate_aggregated_stats(time_period_type = "monthly", stat_type = "mean", agg_type = "time")
+        agg_dict_cmaps = verif.calculate_aggregated_stats(time_period_type = "monthly", stat_type = "mean", agg_type = "time",
+                                                          write_to_nc = write_to_nc)
         verif.plot_cmap_multi_panel(data_dict = agg_dict_cmaps, time_period_type = "monthly", stat_type = "mean",
                                     plot_levels = np.arange(0, 5.5, 0.5))
         if plot_errors:
             verif.plot_cmap_multi_panel(data_dict = agg_dict_cmaps, time_period_type = "monthly", stat_type = "mean",
                                         plot_levels = np.arange(0, 5.5, 0.5), plot_errors = True, single_colorbar = False)
 
-def calculate_and_plot_fss(verif, plot = True):
+    if plot_cmaps:
+        return agg_dict_ts, agg_dict_cmaps
+    else:
+        return agg_dict_ts, {}
+
+def calculate_and_plot_fss(verif, plot = True, write_to_nc = False):
     # FSS by amount threshold, fixed eval radius
     fss_threshold_mm_dict = verif.calculate_fss(eval_type = "by_threshold",
                                                 grid_cell_size = grid_cell_size,
                                                 fixed_radius = 2 * grid_cell_size,
                                                 eval_threshold_list = utils.default_eval_threshold_list_mm,
-                                                is_pctl_threshold = False)
+                                                is_pctl_threshold = False,
+                                                write_to_nc = write_to_nc)
     if plot:
         verif.plot_aggregated_fss(eval_type = "by_threshold", is_pctl_threshold = False, include_frequency_bias = True)
     
@@ -287,7 +295,8 @@ def calculate_and_plot_fss(verif, plot = True):
                                                   grid_cell_size = grid_cell_size,
                                                   fixed_radius = 2 * grid_cell_size,
                                                   eval_threshold_list = utils.default_eval_threshold_list_pctl,
-                                                  is_pctl_threshold = True)
+                                                  is_pctl_threshold = True,
+                                                  write_to_nc = write_to_nc)
     if plot:
         verif.plot_aggregated_fss(eval_type = "by_threshold", is_pctl_threshold = True)
 
@@ -296,7 +305,8 @@ def calculate_and_plot_fss(verif, plot = True):
                                                     grid_cell_size = grid_cell_size,
                                                     fixed_threshold = 10,
                                                     eval_radius_list = grid_cell_size * utils.default_eval_radius_list_grid_cells,
-                                                    is_pctl_threshold = False)
+                                                    is_pctl_threshold = False,
+                                                    write_to_nc = write_to_nc)
     if plot:
         verif.plot_aggregated_fss(eval_type = "by_radius", is_pctl_threshold = False)
 
@@ -305,13 +315,16 @@ def calculate_and_plot_fss(verif, plot = True):
                                                       grid_cell_size = grid_cell_size,
                                                       fixed_threshold = 95.0,
                                                       eval_radius_list = grid_cell_size * utils.default_eval_radius_list_grid_cells,
-                                                      is_pctl_threshold = True)
+                                                      is_pctl_threshold = True,
+                                                      write_to_nc = write_to_nc)
     if plot:
         verif.plot_aggregated_fss(eval_type = "by_radius", is_pctl_threshold = True)
+
+    return fss_threshold_mm_dict, fss_threshold_pctl_dict, fss_radius_thresh_mm_dict, fss_radius_thresh_pctl_dict
     
 def create_subset_time_verif_processor(verif, sel_string):
     da_dict = {}
-    for data_name, da in verif_west.da_dict.items():
+    for data_name, da in verif.da_dict.items():
       da_dict[data_name] = da.sel(period_end_time = sel_string)
 
     start_dt = pd.Timestamp(da_dict["AORC"].period_end_time.values[0])
@@ -324,29 +337,26 @@ def create_subset_time_verif_processor(verif, sel_string):
                                            external_da_dict = da_dict,
                                            data_names = ["AORC", "GFS", "HRRR", "NestedEagle"],
                                            data_grid = "NestedEagle",
-                                           region = "US-WestCoast",
+                                           region = verif.region, 
                                            temporal_res = 6)
 
-def calculate_pctl_exceedances(verif, pctl_val = 95.0):
+def calculate_pctl_exceedances(verif, pctl_val = 95.0, exclude_zeros = True):
     period_end_times = verif.truth_da.period_end_time
     pctl_excd_dict = {}
     for data_name, da in verif.da_dict.items():
-        quantile_da = da.quantile(pctl_val/100.0, dim = ("y", "x"))
+        if exclude_zeros:
+            quantile_da = da.where(da > 0.0).quantile(pctl_val/100.0, dim = ("y", "x"))
+        else:
+            quantile_da = da.quantile(pctl_val/100.0, dim = ("y", "x"))
         excd_da = da.where(da > quantile_da)
         pctl_excd_dict[data_name] = excd_da
 
         print(f"****** {data_name}")
-        #print(quantile_da)
+        print(quantile_da.shape)
         for i, val in enumerate(quantile_da.values):
             print(f"{pd.Timestamp(period_end_times.values[i]).strftime('%Y%m%d.%H')}: {val:0.3f}")
         
-        #for vtime in period_end_times:
-        #    da_vtime = da.sel(period_end_time = vtime)
-         #   excd_da = da_vtime.where(da_vtime > da_vtime.quantile(pctl_val/100.0)
-
     return pctl_excd_dict 
-            
-
                     
 if __name__ == "__main__":
     ds_dict_orig, ds_dict, trimmed_ds_dict, trimmed_da_dict, verif_dict = main()
