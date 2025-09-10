@@ -18,9 +18,9 @@ timeseries="--timeseries"
 # Set to '--include_hrrr' to run verification for shorter time period and include HRRR
 include_hrrr="--include_hrrr"
 if [ "$include_hrrr" = "--include_hrrr" ]; then
-  date_range_str="20150101 20220101"
+  date_range_str="20150101 20211229" # Should end on 20220101 but AORC data missing on 20211230/31
 else
-  date_range_str="20020101 20220101"
+  date_range_str="20020101 20211229" # Should end on 20220101 but AORC data missing on 20211230/31
 fi
 
 # Set to '--plot' to make plots
