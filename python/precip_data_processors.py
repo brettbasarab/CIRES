@@ -1,12 +1,4 @@
-# A set of classes to process and interpolate various QPF/E datasets to
-# match the Global 0.25 degree Replay grid. So, these classes are best
-# used to process data for verification of the Global Replay ONLY. Due to
-# the course resolution of this dataset, it makes most sense to put all data
-# on the Replay grid, rather than interpolating the Replay grid to a finer
-# resolution of one of the other datasets (per personal communication with members of HAD/PPE team).
-# This approach avoids interpolation of the Replay itself, which could unecessarily penalize its
-# performance or at least significantly change the data.
-
+# A set of classes to process and interpolate various QPF/E datasets to a specified destination grid.
 # Classes include:
     # ReplayDataProcessor: process Replay precip data to calculate accumulated precipitation amounts 
     # ImergDataProcesor: process IMERG precip data to calculate accumulated precipitation amounts; interpolate to Replay grid
@@ -14,12 +6,6 @@
     # AorcDataProcessor: process AORC precip data to calculate accumulated precipitation amounts; interpolate to Replay grid
     # CONUS404DataProcessor: process CONUS404 precip data to calculate accumulated precipitation amounts; interpolate to destination grid
     # NestedReplayDataProcessor: process Nested Replay precip data to calculate accumulated precipitation amounts; interpolate to destination grid 
-
-# TODO:
-    # Generalize the functionality of these classes (it should be mostly there) to interpolate
-    # to any destination grid (rather than only the Replay grid). What will have to sigificantly change
-    # are many of the variable, attribute, and method names within the classes. For example, <model_name>
-    # and <model_grid> should change to <dest_grid_name> and <dest_grid>. 
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -101,6 +87,26 @@ def construct_daily_datetime_list(start_dt, end_dt):
 def format_short_name(data_array):
     formatted_short_name = data_array.short_name.replace(' ', '_').replace('-', '_')
     return formatted_short_name
+
+# Return the native temporal resolution of various datasets in hours
+def get_dataset_native_temporal_res(data_name):
+    match data_name:
+        case "AORC":
+            return 1
+        case "CONUS404":
+            return 1
+        case "ERA5":
+            return 3 # For in-house PSL ERA5 data
+        case "HRRR":
+            return 1
+        case "IMERG":
+            return 0.5
+        case "NestedReplay":
+            return 1
+        case "Replay":
+            return 3
+        case _:
+            return 1
 
 # Spatially interpolate an xarray DataArray using xarray's interp_like method.
 # Interpolate <input_data_array> to the grid of <destination_data_array>.
@@ -223,9 +229,8 @@ class ReplayDataProcessor(object):
                  input_variable_list = ["prateb_ave"],
                  model_name = "Replay",
                  temporal_res = 3,
-                 dest_grid_native_temporal_res = 1, # Native temporal resolution of the destination grid to interpolate to (e.g., 1-hourly for AORC)
-                 DEST_GRID_FLAG = False, # Flag set to True if we are reading in and interpolating to a different destination grid 
-                 dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to different destination grid
+                 DEST_GRID_FLAG = False, # Set to True to spatially interpolate to destination grid 
+                 dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to destination grid
                  dest_grid_name = "AORC",
                  interp_method = "linear",
                  obs_name = None, 
@@ -242,7 +247,6 @@ class ReplayDataProcessor(object):
         # Check date formats
         self.obs_name = obs_name 
         self.temporal_res = int(temporal_res)
-        self.dest_grid_native_temporal_res = int(dest_grid_native_temporal_res)
         self.DEST_GRID_FLAG = DEST_GRID_FLAG
         start_dt_str, end_dt_str = self._convert_obs_dates_to_model_dates(start_dt_str, end_dt_str)
         self.start_dt = check_model_valid_dt_format(start_dt_str, resolution = self.temporal_res)
@@ -277,6 +281,7 @@ class ReplayDataProcessor(object):
         # If DEST_GRID_FLAG = True, define the parameters of the separate grid to which we'll interpolate. 
         if self.DEST_GRID_FLAG:
             self.dest_grid_name = dest_grid_name
+            self.dest_grid_native_temporal_res = get_dataset_native_temporal_res(self.dest_grid_name) # Native temporal resolution of destination grid
             self.dest_temporal_res = dest_temporal_res
             self.interp_method = interp_method
             self._spatially_interpolate_replay_to_dest_grid()
@@ -308,15 +313,15 @@ class ReplayDataProcessor(object):
             return self.summed_time_perioed_dict[var_name].units
         return self.variables_data_dict[var_name].units
 
-    def get_replay_precip_data(self, time_period_hours = 3, spatial_res = "native", load = False):
+    def get_precip_data(self, temporal_res = 3, spatial_res = "native", load = False):
         if (spatial_res == "dest_grid") and not(self.DEST_GRID_FLAG):
             print(f"No data at {spatial_res} spatial resolution")
             return
 
-        if (time_period_hours == self.temporal_res) and (spatial_res == "native"):
+        if (temporal_res == self.temporal_res) and (spatial_res == "native"):
             data_array = self.variables_data_dict[utils.accum_precip_var_name]
         else:
-            data_array = self._calculate_replay_accum_precip_amount(time_period_hours = time_period_hours,
+            data_array = self._calculate_replay_accum_precip_amount(temporal_res = temporal_res,
                                                                     spatial_res = spatial_res)
 
         if load:
@@ -325,10 +330,10 @@ class ReplayDataProcessor(object):
 
         return data_array 
     
-    def how_to_get_replay_precip_data(self):
+    def how_to_get_precip_data(self):
         print("**** HOW TO GET REPLAY PRECIP DATA:")
-        print("Call get_replay_precip_data(time_period_hours = 3, spatial_res = 'native', load = False)")
-        print("The argument time_period_hours is an integer representing the desired temporal resolution in hours")
+        print("Call get_precip_data(temporal_res = 3, spatial_res = 'native', load = False)")
+        print("The argument temporal_res is an integer representing the desired temporal resolution in hours")
     
     ##### PRIVATE METHODS (ReplayDataProcessor) #####
     # If we're going to plot a time series, ensure we have the data we need to do so.
@@ -441,7 +446,7 @@ class ReplayDataProcessor(object):
 
     # Sum totals at the native replay temporal resolution to derive totals over longer time periods
     # (3, 6, 12, 24 hours...).
-    def _calculate_replay_accum_precip_amount(self, time_period_hours = 3, spatial_res = "native"):
+    def _calculate_replay_accum_precip_amount(self, temporal_res = 3, spatial_res = "native"):
         if (spatial_res == "native"):
             raw_data = self.replay_native_accum_precip
         else:
@@ -450,15 +455,15 @@ class ReplayDataProcessor(object):
                 return
             raw_data = self.precip_dest_grid
 
-        time_step = int(time_period_hours/self.temporal_res)
+        time_step = int(temporal_res/self.temporal_res)
         roller = raw_data.rolling({self.period_end_time_dim_str: time_step})
         accum_precip_data_array = roller.sum()[(time_step - 1)::time_step,:,:]
 
         add_attributes_to_data_array(accum_precip_data_array,
-                                     short_name = f"{time_period_hours:02d}-hour precipitation",
-                                     long_name = f"Precipitation accumulated over the prior {time_period_hours} hour(s)",
+                                     short_name = f"{temporal_res:02d}-hour precipitation",
+                                     long_name = f"Precipitation accumulated over the prior {temporal_res} hour(s)",
                                      units = self.variables_data_dict[utils.accum_precip_var_name].units,
-                                     interval_hours = time_period_hours)
+                                     interval_hours = temporal_res)
 
         return accum_precip_data_array
     
@@ -468,10 +473,10 @@ class ReplayDataProcessor(object):
             return 
         print(f"Spatially interpolating {self.model_name} data to {self.dest_grid_name}")
 
-        # Ensure we select Replay data at the native temporal resolution (3 hours) to interpolate.
+        # Select Replay data at the native temporal resolution (3 hours) to interpolate.
         # Calculation of accmulated amounts at different temporal resolutions is handled by
         # _calculate_replay_accum_precip_amount.
-        replay_precip_to_interpolate = self.get_replay_precip_data(time_period_hours = self.temporal_res).copy()
+        replay_precip_to_interpolate = self.get_precip_data(spatial_res = "native", temporal_res = self.temporal_res).copy()
         
         # Change longitude coordinates of Replay to go from [-180, 180] to match AORC coordinates.
         if (self.dest_grid_name == "AORC"):
@@ -479,22 +484,24 @@ class ReplayDataProcessor(object):
             replay_precip_to_interpolate["lon"] = replay_lons_m180to180
             replay_precip_to_interpolate = replay_precip_to_interpolate.sortby("lon") 
 
-        # Get destination data array by instantiating the apppropriate class
+        # Get destination data array by instantiating the appropriate class
         match self.dest_grid_name:
             case "AORC":
                 start_dt_dest_grid = self.start_dt - dt.timedelta(hours = self.temporal_res - self.dest_grid_native_temporal_res)
                 end_dt_dest_grid = self.end_dt
                 dest_grid_processor = AorcDataProcessor(start_dt_dest_grid.strftime("%Y%m%d.%H"),
                                                         end_dt_dest_grid.strftime("%Y%m%d.%H"),
-                                                        MODEL_GRID_FLAG = False,
+                                                        DEST_GRID_FLAG = False,
                                                         region = self.region)
-                self.dest_data_array = dest_grid_processor.get_precip_data(spatial_res = "native", temporal_res = self.temporal_res) 
             case "StageIV":
-                raise NotImplementedError 
+                print("Error: Interpolation to StageIV grid not yet implemented")
+                return 
             case _:
-                raise NotImplementedError 
+                print(f"Error: Interpolation to {self.dest_grid_name} grid not yet implemented")
+                return 
 
         # Spatially interpolate Replay data to output grid 
+        self.dest_data_array = dest_grid_processor.get_precip_data(spatial_res = "native", temporal_res = self.temporal_res) 
         self.precip_dest_grid = spatially_interpolate_using_interp_like(replay_precip_to_interpolate,
                                                                         self.dest_data_array,
                                                                         interp_method = self.interp_method, 
@@ -583,13 +590,13 @@ class ReplayDataProcessor(object):
         print(f"Saving {fig_path}")
         plt.savefig(fig_path)
 
-    def write_replay_precip_data_to_netcdf(self, temporal_res = 3, spatial_res = "native", file_cadence = "day", testing = False):
+    def write_precip_data_to_netcdf(self, temporal_res = 3, spatial_res = "native", file_cadence = "day", testing = False):
         if (spatial_res == "dest_grid") and (not self.DEST_GRID_FLAG):
             print(f"No data at {spatial_res} spatial resoluation to write to netCDF")
             return
 
         # Get data to write
-        full_data_array = self.get_replay_precip_data(time_period_hours = temporal_res, spatial_res = spatial_res, load = True)
+        full_data_array = self.get_precip_data(temporal_res = temporal_res, spatial_res = spatial_res, load = True)
 
         output_var_name = f"precipitation_{temporal_res:02d}_hour"
         formatted_short_name = f"{temporal_res:02d}_hour_precipitation"
@@ -618,21 +625,21 @@ class ReplayDataProcessor(object):
                                    file_cadence = file_cadence,
                                    testing = testing)
 
-class ImergDataProcessor(ReplayDataProcessor):
+class ImergDataProcessor(object):
     def __init__(self, start_dt_str, end_dt_str,
                        obs_name = "IMERG",
                        native_data_dir = "/Projects/BIL/Extreme_Intercomp/IMERG/Final",
                        native_data_version_string = "V07B",
                        native_data_temporal_res_hours = 0.5,
-                       MODEL_GRID_FLAG = False, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
-                       model_temporal_res = 3,
-                       model_name = "Replay",
+                       DEST_GRID_FLAG = False, # Set to True to spatially interpolate to destination grid 
+                       dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to destination grid
+                       dest_grid_name = "Replay",
                        interp_method = "linear",
                        region = "Global",
                        user_dir = "bbasarab"):
 
         # Process start and end datetime strings into all the date/time info we'll need
-        self.MODEL_GRID_FLAG = MODEL_GRID_FLAG
+        self.DEST_GRID_FLAG = DEST_GRID_FLAG
         self.native_data_temporal_res_hours = native_data_temporal_res_hours # Always in hours
         self.start_dt_str = start_dt_str
         self.end_dt_str = end_dt_str
@@ -666,20 +673,13 @@ class ImergDataProcessor(ReplayDataProcessor):
         self._create_precip_data_array()
         self._calculate_all_native_accum_precip_amounts()
 
-        # Set an accompanying model grid to interpolate to
-        if self.MODEL_GRID_FLAG:
-            super().__init__(start_dt_str, end_dt_str,
-                             model_name = model_name,
-                             temporal_res = model_temporal_res,
-                             obs_name = obs_name, 
-                             lat_lon = None,
-                             region = region,
-                             user_dir = user_dir)
-            self.model_name = model_name
-            self.model_temporal_res = model_temporal_res
+        # Set destination grid to interpolate to
+        if self.DEST_GRID_FLAG:
+            self.dest_grid_name = dest_grid_name
+            self.dest_grid_native_temporal_res = get_dataset_native_temporal_res(self.dest_grid_name) # Native temporal resolution of destination grid
+            self.dest_temporal_res = dest_temporal_res # Output temporal resolution that we want for output to netCDF, etc.
             self.interp_method = interp_method
-            self.model_data_array = self.get_replay_precip_data() 
-            self._spatially_interpolate_imerg_to_model_grid()
+            self._spatially_interpolate_imerg_to_dest_grid()
 
     ##### GETTER METHODS (ImergDataProcessor) #####
     def get_imerg_valid_dt_list(self):
@@ -693,8 +693,8 @@ class ImergDataProcessor(ReplayDataProcessor):
 
     def get_precip_data(self, spatial_res = "native", temporal_res = "native", load = False):
         match spatial_res:
-            case "model":
-                if (not self.MODEL_GRID_FLAG): 
+            case "dest_grid":
+                if (not self.DEST_GRID_FLAG): 
                     print(f"No data at {spatial_res} spatial resolution")
                     return
                 data_array = self._calculate_imerg_accum_precip_amount(time_period_hours = temporal_res, spatial_res = spatial_res) 
@@ -707,25 +707,25 @@ class ImergDataProcessor(ReplayDataProcessor):
                         data_array = self._calculate_imerg_accum_precip_amount(time_period_hours = temporal_res)
                         self._add_imerg_data_array_attributes(data_array, temporal_res) 
             case _:
-                print(f"No data at {spatial_res} spatial resolution; use 'native' or 'model'")
+                print(f"No data at {spatial_res} spatial resolution; use 'native' or 'dest_grid'")
                 return
             
         if load:
             if (spatial_res == "native"):
                 print(f"Loading precip data for {self.obs_name}")
             else:
-                print(f"Loading precip data for {self.obs_name} interpolated to {self.model_name} grid")
+                print(f"Loading precip data for {self.obs_name} interpolated to {self.dest_grid_name} grid")
             data_array.load()
         return data_array
 
     def get_imerg_missing_value(self):
         return self.missing_value
 
-    def get_model_name(self):
-        if (not self.MODEL_GRID_FLAG):
-            print("No accompanying model data")
+    def get_dest_grid_name(self):
+        if (not self.DEST_GRID_FLAG):
+            print("No accompanying dest grid data")
             return 
-        return self.model_name
+        return self.dest_grid_name
 
     def get_obs_name(self):
         return self.obs_name
@@ -733,7 +733,7 @@ class ImergDataProcessor(ReplayDataProcessor):
     def how_to_get_precip_data(self):
         print("**** HOW TO GET IMERG PRECIP DATA:")
         print("Call get_precip_data(spatial_res = 'native', temporal_res = 'native', load = False)")
-        print("The argument spatial_res can be 'model' or 'native'")
+        print("The argument spatial_res can be 'dest_grid' or 'native'")
         print("The argument temporal_res can be 'native' or an integer representing the desired temporal resolution in hours")
  
     ##### PRIVATE METHODS (ImergDataProcessor) #####
@@ -825,9 +825,9 @@ class ImergDataProcessor(ReplayDataProcessor):
     # Sum hourly totals to derive totals over longer time periods
     # (3, 6, 12, 24 hours...). Again, some code here needs to be generalized.
     def _calculate_imerg_accum_precip_amount(self, time_period_hours = 3, spatial_res = "native"):
-        if (spatial_res == "model"):
-            time_step = int(time_period_hours/self.model_temporal_res)
-            raw_data = self.precip_model_grid
+        if (spatial_res == "dest_grid"):
+            time_step = int(time_period_hours/self.dest_grid_native_temporal_res)
+            raw_data = self.precip_dest_grid
         else:
             time_step = int(time_period_hours/1) # Use IMERG hourly data to calculate other accumulation amounts
             raw_data = self.precip_hourly
@@ -909,32 +909,56 @@ class ImergDataProcessor(ReplayDataProcessor):
             # destination grid. However, I am keeping this re-ordering step in order to make the code more
             # transparent, intuitive, and understandable. 
     # Step 1) is done in _index_variables_by_datetime in the ReplayDataProcessor class, where the Replay dimensions are renamed.
-    # Step 2) is done below, in _spatially_interpolate_imerg_to_model_grid (calculation of imerg_lons_0to360 and assignment to "lon" coordinates).
-    # Step 3) is done below, in _spatially_interpolate_imerg_to_model_grid (call to sortby method).
-    def _spatially_interpolate_imerg_to_model_grid(self):
-        if (not self.MODEL_GRID_FLAG): 
-            print("No model data; not spatially interpolating to model grid")
+    # Step 2) is done below, in _spatially_interpolate_imerg_to_dest_grid (calculation of imerg_lons_0to360 and assignment to "lon" coordinates).
+    # Step 3) is done below, in _spatially_interpolate_imerg_to_dest_grid (call to sortby method).
+    def _spatially_interpolate_imerg_to_dest_grid(self):
+        if (not self.DEST_GRID_FLAG): 
+            print("No dest grid data; not spatially interpolating to dest grid grid")
             return 
-        print(f"Spatially interpolating {self.obs_name} data to model data grid")
+        print(f"Spatially interpolating {self.obs_name} data to {self.dest_grid_name} data grid")
 
-        imerg_precip_to_interpolate = self.get_precip_data(temporal_res = self.model_temporal_res,
-                                                           spatial_res = "native").copy()
+        imerg_precip_to_interpolate = self.get_precip_data(spatial_res = "native",
+                                                           temporal_res = self.dest_grid_native_temporal_res).copy()
 
         # Change longitude coordinates of IMERG to go from [0, 360] to match Replay coordinates.
-        if (self.model_name == "Replay"):
+        if (self.dest_grid_name == "Replay"):
             imerg_lons_0to360 = utils.longitude_to_0to360(imerg_precip_to_interpolate["lon"].values)
             imerg_precip_to_interpolate["lon"] = imerg_lons_0to360 
-            imerg_precip_to_interpolate = imerg_precip_to_interpolate.sortby("lon") 
+            imerg_precip_to_interpolate = imerg_precip_to_interpolate.sortby("lon")
+ 
+        # Get destination data array by instantiating the appropriate class
+        match self.dest_grid_name:
+            case "AORC":
+                start_dt_dest_grid = self.start_dt + dt.timedelta(hours = 1) # IMERG is period beginning, starts at .0000
+                end_dt_dest_grid = self.end_dt + dt.timedelta(minutes = 30) # IMERG is period beginning, ends at .XX30
+                dest_grid_processor = AorcDataProcessor(start_dt_dest_grid.strftime("%Y%m%d.%H"),
+                                                        end_dt_dest_grid.strftime("%Y%m%d.%H"),
+                                                        DEST_GRID_FLAG = False,
+                                                        region = self.region)
+            case "Replay":
+                start_dt_dest_grid = self.start_dt + dt.timedelta(hours = 3)
+                end_dt_dest_grid = self.end_dt + dt.timedelta(minutes = 30) 
+                dest_grid_processor = ReplayDataProcessor(start_dt_dest_grid.strftime("%Y%m%d.%H"),
+                                                          end_dt_dest_grid.strftime("%Y%m%d.%H"), 
+                                                          DEST_GRID_FLAG = False,
+                                                          region = self.region)
+            case "StageIV":
+                print("Error: Interpolation to StageIV grid not yet implemented")
+                return 
+            case _:
+                print(f"Error: Interpolation to {self.dest_grid_name} grid not yet implemented")
+                return 
 
-        # Spatially interpolate IMERG data to the model grid
-        self.precip_model_grid = spatially_interpolate_using_interp_like(imerg_precip_to_interpolate,
-                                                                         self.model_data_array,
-                                                                         interp_method = self.interp_method, 
-                                                                         correct_small_negative_values = True)   
+        # Spatially interpolate IMERG data to the dest grid
+        self.dest_data_array = dest_grid_processor.get_precip_data(spatial_res = "native", temporal_res = self.dest_grid_native_temporal_res)
+        self.precip_dest_grid = spatially_interpolate_using_interp_like(imerg_precip_to_interpolate,
+                                                                        self.dest_data_array, 
+                                                                        interp_method = self.interp_method, 
+                                                                        correct_small_negative_values = True)   
 
     ##### PUBLIC METHODS (ImergDataProcessor) #####
     def write_precip_data_to_netcdf(self, temporal_res = "native", spatial_res = "native", file_cadence = "day", testing = False):
-        if (spatial_res == "model") and (not self.MODEL_GRID_FLAG):
+        if (spatial_res == "dest_grid") and (not self.DEST_GRID_FLAG):
             print(f"No data at {spatial_res} spatial resoluation to write to netCDF")
             return 
 
@@ -951,8 +975,8 @@ class ImergDataProcessor(ReplayDataProcessor):
         
         if (spatial_res == "native"):
             output_grid_string = set_grid_name_for_file_names("native")
-        elif (spatial_res == "model"):
-            output_grid_string = set_grid_name_for_file_names(self.model_name)
+        elif (spatial_res == "dest_grid"):
+            output_grid_string = set_grid_name_for_file_names(self.dest_grid_name)
         
         # Construct file directory
         fname_prefix = f"{self.obs_name}.{output_grid_string}.{formatted_short_name}"
@@ -975,21 +999,21 @@ class ImergDataProcessor(ReplayDataProcessor):
                                    file_cadence = file_cadence,
                                    testing = testing)
 
-class ERA5DataProcessor(ReplayDataProcessor):
+class ERA5DataProcessor(object):
     def __init__(self, start_dt_str, end_dt_str,
                        obs_name = "ERA5",
                        native_data_dir = "/Projects/era5/monolevel/",
                        temporal_res = 3, # ERA5 is hourly, but the data availabale at PSL are 3-hourly
                        input_variable_list = ["prate"],
-                       MODEL_GRID_FLAG = False, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
-                       model_temporal_res = 3,
-                       model_name = "Replay",
+                       DEST_GRID_FLAG = False, # Set to True to spatially interpolate to destination grid 
+                       dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to destination grid
+                       dest_grid_name = "Replay",
                        interp_method = "linear",
                        region = "Global",
                        user_dir = "bbasarab"):
 
         # Process start and end datetime strings into all the date/time info we'll need
-        self.MODEL_GRID_FLAG = MODEL_GRID_FLAG
+        self.DEST_GRID_FLAG = DEST_GRID_FLAG
         self.temporal_res = temporal_res
         self.input_variable_list = input_variable_list
         self.start_dt_str = start_dt_str
@@ -1023,26 +1047,18 @@ class ERA5DataProcessor(ReplayDataProcessor):
         self._construct_input_file_lists()
         self._read_input_files()
 
-        # Set an accompanying model grid to interpolate to
-        if self.MODEL_GRID_FLAG:
-            super().__init__(self.start_dt_str_period_end, self.end_dt_str_period_end,
-                             model_name = model_name,
-                             temporal_res = model_temporal_res,
-                             obs_name = obs_name, 
-                             lat_lon = None,
-                             region = region,
-                             user_dir = user_dir)
-            self.model_name = model_name
-            self.model_temporal_res = model_temporal_res
+        # Set an accompanying dest grid to interpolate to
+        if self.DEST_GRID_FLAG:
+            self.dest_grid_name = dest_grid_name
+            self.dest_temporal_res = dest_temporal_res
             self.interp_method = interp_method
-            self.model_data_array = self.get_replay_precip_data() 
-            self._spatially_interpolate_era5_to_model_grid()
+            self._spatially_interpolate_era5_to_dest_grid()
 
     ##### GETTER METHODS (ERA5DataProcessor) #####
     def get_precip_data(self, spatial_res = "native", temporal_res = "native", load = False):
         match spatial_res:
-            case "model":
-                if (not self.MODEL_GRID_FLAG): 
+            case "dest_grid":
+                if (not self.DEST_GRID_FLAG): 
                     print(f"No data at {spatial_res} spatial resolution")
                     return
                 data_array = self._calculate_era5_accum_precip_amount(time_period_hours = temporal_res, spatial_res = spatial_res) 
@@ -1053,7 +1069,7 @@ class ERA5DataProcessor(ReplayDataProcessor):
                     case _:
                         data_array = self._calculate_era5_accum_precip_amount(time_period_hours = temporal_res)
             case _:
-                print(f"No data at {spatial_res} spatial resolution; use 'native' or 'model'")
+                print(f"No data at {spatial_res} spatial resolution; use 'native' or 'dest_grid'")
                 return
 
         if load:
@@ -1062,11 +1078,11 @@ class ERA5DataProcessor(ReplayDataProcessor):
 
         return data_array
  
-    def get_model_name(self):
-        if (not self.MODEL_GRID_FLAG):
-            print("No accompanying model data")
+    def get_dest_grid_name(self):
+        if (not self.DEST_GRID_FLAG):
+            print("No accompanying dest_grid data")
             return 
-        return self.model_name
+        return self.dest_grid_name
 
     def get_obs_name(self):
         return self.obs_name
@@ -1074,7 +1090,7 @@ class ERA5DataProcessor(ReplayDataProcessor):
     def how_to_get_precip_data(self):
         print("**** HOW TO GET ERA5 PRECIP DATA:")
         print("Call get_precip_data(spatial_res = 'native', temporal_res = 'native', load = False)")
-        print("The argument spatial_res can be 'model' or 'native'")
+        print("The argument spatial_res can be 'dest_grid' or 'native'")
         print("The argument temporal_res can be 'native' or an integer representing the desired temporal resolution in hours")
  
     ##### PRIVATE METHODS (ERA5DataProcessor) #####
@@ -1126,8 +1142,8 @@ class ERA5DataProcessor(ReplayDataProcessor):
             # available in self.input_variable_list
             self._calculate_era5_native_accum_precip_amount(var)
 
-    # Calculate accumulated precip at the native temporal resolution of the Replay
-    # That is accumulated precip valid over the time steps of the model 
+    # Calculate accumulated precip at the native temporal resolution ERA5 
+    # That is accumulated precip valid over the time steps of ERA5 
     def _calculate_era5_native_accum_precip_amount(self, var_name):
         match var_name:
             case "prate":
@@ -1161,8 +1177,8 @@ class ERA5DataProcessor(ReplayDataProcessor):
     def _calculate_era5_accum_precip_amount(self, time_period_hours = 3, spatial_res = "native"):
         time_step = int(time_period_hours/self.temporal_res)
 
-        if (spatial_res == "model"):
-            raw_data = self.precip_model_grid
+        if (spatial_res == "dest_grid"):
+            raw_data = self.precip_dest_grid
         else:
             raw_data = self.era5_da_dict[utils.accum_precip_var_name]
         roller = raw_data.rolling({self.period_end_time_dim_str: time_step})
@@ -1176,23 +1192,53 @@ class ERA5DataProcessor(ReplayDataProcessor):
 
         return accum_precip_data_array
 
-    def _spatially_interpolate_era5_to_model_grid(self):
-        if (not self.MODEL_GRID_FLAG): 
-            print("No model data; not spatially interpolating to model grid")
+    def _spatially_interpolate_era5_to_dest_grid(self):
+        if (not self.DEST_GRID_FLAG): 
+            print("No dest grid data; not spatially interpolating to {self.dest_grid_name} grid")
             return 
-        print(f"Spatially interpolating {self.obs_name} data to model data grid")
+        print(f"Spatially interpolating {self.obs_name} data to {self.dest_grid_name} grid")
 
-        era5_precip_to_interpolate = self.get_precip_data(temporal_res = self.model_temporal_res,
-                                                               spatial_res = "native").copy()
+        era5_precip_to_interpolate = self.get_precip_data(spatial_res = "native",
+                                                          temporal_res = self.temporal_res).copy()
+        
+        # Change longitude coordinates of ERA5 to go from [-180, 180] (rather than [0, 360]) to match AORC coordinates 
+        if (self.dest_grid_name == "AORC"):
+            era5_lons_m180to180 = utils.longitude_to_m180to180(era5_precip_to_interpolate["lon"].values)
+            era5_precip_to_interpolate["lon"] = era5_lons_m180to180
+            era5_precip_to_interpolate = era5_precip_to_interpolate.sortby("lon") 
 
-        self.precip_model_grid = spatially_interpolate_using_interp_like(era5_precip_to_interpolate,
-                                                                         self.model_data_array,
-                                                                         interp_method = self.interp_method, 
-                                                                         correct_small_negative_values = True)   
+        # Get destination data array by instantiating the appropriate class
+        match self.dest_grid_name:
+            case "AORC":
+                start_dt_dest_grid = self.start_dt + dt.timedelta(hours = 1) # ERA5 is period beginning, starts at .0000 
+                end_dt_dest_grid = self.end_dt + dt.timedelta(hours = 3) # ERA5 is period beginnning, ends at at .2100 
+                dest_grid_processor = AorcDataProcessor(start_dt_dest_grid.strftime("%Y%m%d.%H"),
+                                                        end_dt_dest_grid.strftime("%Y%m%d.%H"),
+                                                        DEST_GRID_FLAG = False,
+                                                        region = self.region)
+            case "Replay":
+                start_dt_dest_grid = self.start_dt + dt.timedelta(hours = 3)
+                end_dt_dest_grid = self.end_dt + dt.timedelta(hours = 3)
+                dest_grid_processor = ReplayDataProcessor(start_dt_dest_grid.strftime("%Y%m%d.%H"),
+                                                          end_dt_dest_grid.strftime("%Y%m%d.%H"),
+                                                          DEST_GRID_FLAG = False,
+                                                          region = self.region)
+            case "StageIV":
+                print("Error: Interpolation to StageIV grid not yet implemented")
+                return 
+            case _:
+                print(f"Error: Interpolation to {self.dest_grid_name} grid not yet implemented")
+                return 
+
+        self.dest_data_array = dest_grid_processor.get_precip_data(spatial_res = "native", temporal_res = self.temporal_res) 
+        self.precip_dest_grid = spatially_interpolate_using_interp_like(era5_precip_to_interpolate,
+                                                                        self.dest_data_array,
+                                                                        interp_method = self.interp_method, 
+                                                                        correct_small_negative_values = True)   
     
     ##### PUBLIC METHODS (ERA5DataProcessor) #####
     def write_precip_data_to_netcdf(self, temporal_res = "native", spatial_res = "native", file_cadence = "day", testing = False):
-        if (spatial_res == "model") and (not self.MODEL_GRID_FLAG):
+        if (spatial_res == "dest_grid") and (not self.DEST_GRID_FLAG):
             print(f"No data at {spatial_res} spatial resoluation to write to netCDF")
             return 
 
@@ -1209,8 +1255,8 @@ class ERA5DataProcessor(ReplayDataProcessor):
         
         if (spatial_res == "native"):
             output_grid_string = set_grid_name_for_file_names("native") 
-        elif (spatial_res == "model"):
-            output_grid_string = set_grid_name_for_file_names(self.model_name)
+        elif (spatial_res == "dest_grid"):
+            output_grid_string = set_grid_name_for_file_names(self.dest_grid_name)
  
         # Construct file directory
         fname_prefix = f"{self.obs_name}.{output_grid_string}.{formatted_short_name}"
@@ -1233,21 +1279,21 @@ class ERA5DataProcessor(ReplayDataProcessor):
                                    file_cadence = file_cadence,
                                    testing = testing)
 
-class AorcDataProcessor(ReplayDataProcessor):
+class AorcDataProcessor(object):
     def __init__(self, start_dt_str, end_dt_str,
                        obs_name = "AORC",
                        #native_data_dir = "/Projects/BIL/Extreme_Intercomp/AORC", # /Projects/BIL area with time offset
                        native_data_dir = "/Projects/AORC_CONUS_4km",
                        obs_temporal_res = 1, 
-                       MODEL_GRID_FLAG = False, # Flag set to True if we are reading in and interpolating to (or from) an accompanying model grid
-                       model_temporal_res = 3,
-                       model_name = "Replay",
+                       DEST_GRID_FLAG = False, # Set to True to spatially interpolate to destination grid 
+                       dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to destination grid
+                       dest_grid_name = "Replay",
                        interp_method = "linear",
                        region = "Global",
                        user_dir = "bbasarab"):
 
         # Process start and end datetime strings into all the date/time info we'll need
-        self.MODEL_GRID_FLAG = MODEL_GRID_FLAG
+        self.DEST_GRID_FLAG = DEST_GRID_FLAG
         self.obs_temporal_res = obs_temporal_res
         self.start_dt_str = start_dt_str
         self.end_dt_str = end_dt_str
@@ -1279,30 +1325,21 @@ class AorcDataProcessor(ReplayDataProcessor):
         # Extract hourly accumulated precipitation amounts (native AORC data are hourly) 
         self._calculate_aorc_native_accum_precip_amount()
 
-        # Set an accompanying model grid to interpolate to
-        if self.MODEL_GRID_FLAG:
-            start_dt_model = self.start_dt + dt.timedelta(hours = model_temporal_res - self.obs_temporal_res)
-            end_dt_model = self.end_dt
-            super().__init__(start_dt_model.strftime("%Y%m%d.%H"), end_dt_model.strftime("%Y%m%d.%H"),
-                             model_name = model_name,
-                             temporal_res = model_temporal_res,
-                             obs_name = obs_name, 
-                             lat_lon = None,
-                             region = region,
-                             user_dir = user_dir)
-            self.model_name = model_name
-            self.model_temporal_res = model_temporal_res
+        # Set an accompanying dest grid to interpolate to
+        if self.DEST_GRID_FLAG:
+            self.dest_grid_name = dest_grid_name
+            self.dest_grid_native_temporal_res = get_dataset_native_temporal_res(self.dest_grid_name) # Native temporal resolution of destination grid
+            self.dest_temporal_res = dest_temporal_res
             self.interp_method = interp_method
-            self.model_data_array = self.get_replay_precip_data() 
-            self._spatially_interpolate_aorc_to_model_grid()
+            self._spatially_interpolate_aorc_to_dest_grid()
 
     ##### GETTER METHODS (AorcDataProcessor) #####
-    # FIXME: Here and other get_precip_data methods: Don't try to return a precip array if spatial_res = "model"
-    # but temporal_res is finer than the model resolution (since this isn't possible)
+    # FIXME: Here and other get_precip_data methods: Don't try to return a precip array if spatial_res = "dest_grid"
+    # but temporal_res is finer than the dest_grid resolution (since this isn't possible)
     def get_precip_data(self, spatial_res = "native", temporal_res = "native", load = False):
         match spatial_res:
-            case "model":
-                if (not self.MODEL_GRID_FLAG): 
+            case "dest_grid":
+                if (not self.DEST_GRID_FLAG): 
                     print(f"No data at {spatial_res} spatial resolution")
                     return
                 data_array = self._calculate_aorc_accum_precip_amount(time_period_hours = temporal_res, spatial_res = spatial_res) 
@@ -1313,7 +1350,7 @@ class AorcDataProcessor(ReplayDataProcessor):
                     case _:
                         data_array = self._calculate_aorc_accum_precip_amount(time_period_hours = temporal_res)
             case _:
-                print(f"No data at {spatial_res} spatial resolution; use 'native' or 'model'")
+                print(f"No data at {spatial_res} spatial resolution; use 'native' or 'dest_grid'")
                 return
 
         if load:
@@ -1322,11 +1359,11 @@ class AorcDataProcessor(ReplayDataProcessor):
 
         return data_array
  
-    def get_model_name(self):
-        if (not self.MODEL_GRID_FLAG):
-            print("No accompanying model data")
+    def get_dest_grid_name(self):
+        if (not self.DEST_GRID_FLAG):
+            print("No accompanying dest grid data")
             return 
-        return self.model_name
+        return self.dest_grid_name
 
     def get_obs_name(self):
         return self.obs_name
@@ -1334,7 +1371,7 @@ class AorcDataProcessor(ReplayDataProcessor):
     def how_to_get_precip_data(self):
         print("**** HOW TO GET AORC PRECIP DATA:")
         print("Call get_precip_data(spatial_res = 'native', temporal_res = 'native', load = False)")
-        print("The argument spatial_res can be 'model' or 'native'")
+        print("The argument spatial_res can be 'dest_grid' or 'native'")
         print("The argument temporal_res can be 'native' or an integer representing the desired temporal resolution in hours")
 
     ##### PRIVATE METHODS (AorcDataProcessor) #####
@@ -1369,7 +1406,6 @@ class AorcDataProcessor(ReplayDataProcessor):
 
     # Calculate accumulated precip at the native temporal resolution of AORC (i.e., hourly)
     # AORC presents average precip rate in mm/hr over the prior hour, so just used these values directly to represent hourly accumulated precipitation 
-    # That is accumulated precip valid over the time steps of the model 
     def _calculate_aorc_native_accum_precip_amount(self):
         print(f"Calculating accumulated {self.obs_name} precipitation from prate")
 
@@ -1400,9 +1436,9 @@ class AorcDataProcessor(ReplayDataProcessor):
     # Sum totals at the AORC temporal resolution to derive totals over longer time periods
     # (3, 6, 12, 24 hours...).
     def _calculate_aorc_accum_precip_amount(self, time_period_hours = 3, spatial_res = "native"):
-        if (spatial_res == "model"):
-            time_step = int(time_period_hours/self.model_temporal_res)
-            raw_data = self.precip_model_grid
+        if (spatial_res == "dest_grid"):
+            time_step = int(time_period_hours/self.dest_temporal_res)
+            raw_data = self.precip_dest_grid
         else:
             time_step = int(time_period_hours/self.obs_temporal_res)
             raw_data = self.aorc_native_accum_precip
@@ -1417,28 +1453,46 @@ class AorcDataProcessor(ReplayDataProcessor):
 
         return accum_precip_data_array
 
-    def _spatially_interpolate_aorc_to_model_grid(self):
-        if (not self.MODEL_GRID_FLAG): 
-            print("No model data; not spatially interpolating to model grid")
+    def _spatially_interpolate_aorc_to_dest_grid(self):
+        if (not self.DEST_GRID_FLAG): 
+            print(f"No dest grid data; not spatially interpolating to {self.dest_grid} grid")
             return 
-        print(f"Spatially interpolating {self.obs_name} data to model data grid")
+        print(f"Spatially interpolating {self.obs_name} data to {self.dest_grid} grid")
 
-        aorc_precip_to_interpolate = self.get_precip_data(temporal_res = self.model_temporal_res, spatial_res = "native").copy()
+        aorc_precip_to_interpolate = self.get_precip_data(spatial_res = "native",
+                                                          temporal_res = self.dest_grid_native_temporal_res).copy()
 
-        # Change longitude coordinates of AORC to be a subset of [0, 360] to  match Replay coordinates.
-        if (self.model_name == "Replay"):
+        # Change longitude coordinates of AORC to be a subset of [0, 360] to match Replay coordinates.
+        if (self.dest_grid_name == "Replay"):
             aorc_lons_0to360 = utils.longitude_to_0to360(aorc_precip_to_interpolate["lon"].values)
             aorc_precip_to_interpolate["lon"] = aorc_lons_0to360 
             aorc_precip_to_interpolate = aorc_precip_to_interpolate.sortby("lon") 
 
-        self.precip_model_grid = spatially_interpolate_using_interp_like(aorc_precip_to_interpolate,
-                                                                         self.model_data_array,
-                                                                         interp_method = self.interp_method, 
-                                                                         correct_small_negative_values = True)   
+        # Get destination data array by instantiating the appropriate class
+        match self.dest_grid_name:
+            case "Replay":
+                start_dt_dest_grid = self.start_dt + dt.timedelta(hours = self.dest_grid_native_temporal_res - self.temporal_res)
+                end_dt_dest_grid = self.end_dt
+                dest_grid_processor = ReplayDataProcessor(start_dt_dest_grid.strftime("%Y%m%d.%H"),
+                                                          end_dt_dest_grid.strftime("%Y%m%d.%H"),
+                                                          DEST_GRID_FLAG = False,
+                                                          region = self.region)
+            case "StageIV":
+                print("Error: Interpolation to StageIV grid not yet implemented")
+                return 
+            case _:
+                print(f"Error: Interpolation to {self.dest_grid_name} grid not yet implemented")
+                return
+
+        self.dest_data_array = dest_grid_processor.get_precip_data(spatial_res = "native", temporal_res = self.dest_grid_native_temporal_res)
+        self.precip_dest_grid = spatially_interpolate_using_interp_like(aorc_precip_to_interpolate,
+                                                                        self.dest_data_array,
+                                                                        interp_method = self.interp_method, 
+                                                                        correct_small_negative_values = True)   
     
     ##### PUBLIC METHODS (AorcDataProcessor) #####
     def write_precip_data_to_netcdf(self, temporal_res = "native", spatial_res = "native", file_cadence = "day", testing = False):
-        if (spatial_res == "model") and (not self.MODEL_GRID_FLAG):
+        if (spatial_res == "dest_grid") and (not self.DEST_GRID_FLAG):
             print(f"No data at {spatial_res} spatial resoluation to write to netCDF")
             return 
 
@@ -1455,8 +1509,8 @@ class AorcDataProcessor(ReplayDataProcessor):
         
         if (spatial_res == "native"):
             output_grid_string = set_grid_name_for_file_names(spatial_res)
-        elif (spatial_res == "model"):
-            output_grid_string = set_grid_name_for_file_names(self.model_name)
+        elif (spatial_res == "dest_grid"):
+            output_grid_string = set_grid_name_for_file_names(self.dest_grid_name)
 
         # Construct file directory
         fname_prefix = f"{self.obs_name}.{output_grid_string}.{formatted_short_name}"
@@ -1486,8 +1540,8 @@ class CONUS404DataProcessor(object):
                        data_name = "CONUS404",
                        input_variable_list = ["PREC_ACC_NC"],
                        native_temporal_res = 1, 
-                       DEST_GRID_FLAG = False, # Flag set to True if we are reading in and interpolating to a different destination grid 
-                       dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to different destination grid (NOT the same as model_temporal_res in other classes)
+                       DEST_GRID_FLAG = False, # Set to True to spatially interpolate to destination grid 
+                       dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to destination grid
                        dest_grid_name = "Replay",
                        interp_method = "linear",
                        region = "CONUS",
@@ -1773,8 +1827,8 @@ class NestedReplayDataProcessor(object):
                        data_name = "NestedReplay",
                        native_data_dir = os.path.join(utils.data_nc_dir, "NestedReplay.NativeGrid.01_hour_precipitation"),
                        native_temporal_res = 1, 
-                       DEST_GRID_FLAG = False, # Flag set to True if we are reading in and interpolating to a different destination grid 
-                       dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to different destination grid
+                       DEST_GRID_FLAG = False, # Set to True to spatially interpolate to destination grid 
+                       dest_temporal_res = 24, # Temporal resolution of data we want to spatially interpolate to destination grid
                        dest_grid_name = "AORC",
                        interp_method = "linear",
                        region = "CONUS",
@@ -1930,20 +1984,22 @@ class NestedReplayDataProcessor(object):
         # _calculate_nested_replay_accum_precip_amount.
         nested_replay_precip_to_interpolate = self.get_precip_data(temporal_res = "native").copy()
 
-        # Get destination data array by instantiating the apppropriate class
+        # Get destination data array by instantiating the appropriate class
         match self.dest_grid_name:
             case "AORC":
                 dest_grid_processor = AorcDataProcessor(self.start_dt_str,
                                                         self.end_dt_str,
-                                                        MODEL_GRID_FLAG = False,
+                                                        DEST_GRID_FLAG = False,
                                                         region = self.region)
-                self.dest_data_array = dest_grid_processor.get_precip_data(spatial_res = "native", temporal_res = "native")
             case "StageIV":
-                raise NotImplementedError 
+                print("Error: Interpolation to StageIV grid not yet implemented")
+                return 
             case _:
-                raise NotImplementedError 
+                print(f"Error: Interpolation to {self.dest_grid_name} grid not yet implemented")
+                return
 
         # Spatially interpolate Nested Replay data to output grid 
+        self.dest_data_array = dest_grid_processor.get_precip_data(spatial_res = "native", temporal_res = "native")
         self.precip_dest_grid = spatially_interpolate_using_interp_like(nested_replay_precip_to_interpolate,
                                                                         self.dest_data_array,
                                                                         interp_method = self.interp_method, 

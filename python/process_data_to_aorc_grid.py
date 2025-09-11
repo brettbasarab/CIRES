@@ -8,8 +8,15 @@ import sys
 def main():
     program_description = ("Run script to interpolate precip data to AORC CONUS grid,\n"
                            "write interpolated data to netCDF, and make plots of native and interpolated data.\n"
-                           "Date formats for <start_dt_str> and <end_dt_str> are YYYYmmdd.HH, PERIOD-ENDING\n")
-    parser = argparse.ArgumentParser(description = program_description)
+                           "Note that each dataset requires different input date formats, listed below:\n"
+                           "\tAORC: YYYYmmdd.HH and PERIOD-ENDING\n"
+                           "\tCONUS404: YYYYmmdd.HH and PERIOD-ENDING\n"
+                           "\tERA5: YYYYmmdd.HH and PERIOD-BEGINNING\n"
+                           "\tIMERG: YYYYmmdd.HH[00,30] and PERIOD-BEGINNING\n"
+                           "\tNestedReplay: YYYYmmdd.HH and PERIOD-ENDING\n"
+                           "\tReplay: YYYYmmdd.HH and PERIOD-ENDING\n")
+    print(program_description)
+    parser = argparse.ArgumentParser()
     parser.add_argument("data_name",
                         help = "Name to use for the data to be processed. Currently supported options are AORC, CONUS404, NestedReplay, and Replay.")
     parser.add_argument("start_dt_str",
@@ -45,7 +52,7 @@ def main():
         case "AORC":
             processor = precip_data_processors.AorcDataProcessor(args.start_dt_str,
                                                                  args.end_dt_str,
-                                                                 MODEL_GRID_FLAG = False,
+                                                                 DEST_GRID_FLAG = False,
                                                                  region = args.region)
         case "CONUS404":
             processor = precip_data_processors.CONUS404DataProcessor(args.start_dt_str,
@@ -54,6 +61,20 @@ def main():
                                                                      dest_grid_name = args.output_grid, 
                                                                      dest_temporal_res = args.output_temporal_res, 
                                                                      region = args.region)
+        case "ERA5":
+            processor = precip_data_processors.ERA5DataProcessor(args.start_dt_str,
+                                                                 args.end_dt_str,
+                                                                 DEST_GRID_FLAG = dest_grid_flag,
+                                                                 dest_grid_name = args.output_grid, 
+                                                                 dest_temporal_res = args.output_temporal_res, 
+                                                                 region = args.region)
+        case "IMERG":
+            processor = precip_data_processors.ImergDataProcessor(args.start_dt_str,
+                                                                  args.end_dt_str,
+                                                                  DEST_GRID_FLAG = dest_grid_flag,
+                                                                  dest_grid_name = args.output_grid, 
+                                                                  dest_temporal_res = args.output_temporal_res, 
+                                                                  region = args.region)
         case "NestedReplay":
             processor = precip_data_processors.NestedReplayDataProcessor(args.start_dt_str,
                                                                          args.end_dt_str,
@@ -76,16 +97,10 @@ def main():
     # Write precipitation data to netCDF 
     if (args.write_to_nc):
         print("**** Writing data to netCDF") 
-        if (args.data_name == "Replay"):
-            processor.write_replay_precip_data_to_netcdf(temporal_res = args.output_temporal_res,
-                                                         spatial_res = output_spatial_res,
-                                                         file_cadence = args.nc_file_cadence,
-                                                         testing = args.test_nc)
-        else:
-            processor.write_precip_data_to_netcdf(temporal_res = args.output_temporal_res,
-                                                  spatial_res = output_spatial_res,
-                                                  file_cadence = args.nc_file_cadence,
-                                                  testing = args.test_nc) 
+        processor.write_precip_data_to_netcdf(temporal_res = args.output_temporal_res,
+                                              spatial_res = output_spatial_res,
+                                              file_cadence = args.nc_file_cadence,
+                                              testing = args.test_nc) 
  
     # Plot contour maps for visual inspection
     if (args.plot_maps):
@@ -96,21 +111,23 @@ def main():
         plot_name = set_plot_output_name(output_grid_string, args.data_name, replay_segment = args.replay_segment)
         pputils.plot_cmap_single_panel(precip_native_grid,
                                        plot_name,
-                                       plot_name, 
                                        processor.region,
-                                       plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.output_temporal_res))
+                                       plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.output_temporal_res),
+                                       short_name = "",
+                                       extend = "max")
    
         if dest_grid_flag:
-            # Plot precip data at obs grid resolution
+            # Plot precip data at AORC grid resolution
             print(f"*** Plotting {args.data_name} {args.output_temporal_res}-hourly data at {processor.dest_grid_name} spatial resolution")
             precip_dest_grid = processor.get_precip_data(temporal_res = args.output_temporal_res, spatial_res = "dest_grid", load = True)
             output_grid_string = precip_data_processors.set_grid_name_for_file_names(processor.dest_grid_name) 
             plot_name = set_plot_output_name(output_grid_string, args.data_name, replay_segment = args.replay_segment)
             pputils.plot_cmap_single_panel(precip_dest_grid,
                                            plot_name,
-                                           plot_name, 
                                            processor.region,
-                                           plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.output_temporal_res))
+                                           plot_levels = pputils.variable_plot_limits("accum_precip", temporal_res = args.output_temporal_res),
+                                           short_name = "",
+                                           extend = "max")
 
     return processor
 

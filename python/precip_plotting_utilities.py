@@ -507,89 +507,89 @@ def variable_plot_limits(var_name, temporal_res = "native", linear_precip_scale 
                 # TODO: Update these arrays to be non-linear
                 match temporal_res:
                     case 1:
-                        return np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
-                                         2, 3, 4, 5, # dark greens --> blues
-                                         6, 7, 8, 9, 10, # blues
-                                         13, 16, 19, 22, 25, # purples
-                                         30, 35, 40, 45, 50 # reds --> oranges 
-                                         ])
+                        return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
+                                2, 3, 4, 5, # dark greens --> blues
+                                6, 7, 8, 9, 10, # blues
+                                13, 16, 19, 22, 25, # purples
+                                30, 35, 40, 45, 50 # reds --> oranges 
+                                ]
                     case 3:
-                        return np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
-                                         2, 4, 6, 8, # dark greens --> blues
-                                         10, 12, 14, 16, 18, # blues
-                                         22, 26, 30, 34, 38, # purples
-                                         45, 50, 55, 60, 65 # reds --> oranges 
-                                         ])
+                        return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
+                                2, 4, 6, 8, # dark greens --> blues
+                                10, 12, 14, 16, 18, # blues
+                                22, 26, 30, 34, 38, # purples
+                                45, 50, 55, 60, 65 # reds --> oranges 
+                                ]
                     case 6:
-                        return np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
-                                         2, 4, 6, 8, # dark greens --> blues
-                                         10, 12, 14, 16, 18, # blues
-                                         22, 26, 30, 34, 38, # purples
-                                         45, 50, 55, 60, 65, 70, 75 # reds --> oranges 
-                                         ])
+                        return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
+                                2, 4, 6, 8, # dark greens --> blues
+                                10, 12, 14, 16, 18, # blues
+                                22, 26, 30, 34, 38, # purples
+                                45, 50, 55, 60, 65, 70, 75 # reds --> oranges 
+                                ]
                     case 12:
-                        return np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
-                                         2, 4, 6, 8, # dark greens --> blues
-                                         10, 12, 14, 16, 18, # blues
-                                         22, 26, 30, 34, 38, # purples
-                                         45, 50, 55, 60, 65, 70, 75 # reds --> oranges 
-                                         ])
+                        return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
+                                2, 4, 6, 8, # dark greens --> blues
+                                10, 12, 14, 16, 18, # blues
+                                22, 26, 30, 34, 38, # purples
+                                45, 50, 55, 60, 65, 70, 75 # reds --> oranges 
+                                ]
                     case 24:
-                        return np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
-                                         2, 4, 6, 8, # dark greens --> blues
-                                         10, 12, 14, 16, 18, # blues
-                                         22, 26, 30, 34, 38, # purples
-                                         45, 50, 55, 60, 65, 70, 75 # reds --> oranges 
-                                         ])
+                        return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
+                                2, 4, 6, 8, # dark greens --> blues
+                                10, 12, 14, 16, 18, # blues
+                                22, 26, 30, 34, 38, # purples
+                                45, 50, 55, 60, 65, 70, 75 # reds --> oranges 
+                                ]
                     case 48:
-                        return np.array([0, 3, 6, 9, 12, 15, # white --> greens
-                                         30, 45, 60, 75, # dark greens --> blues
-                                         90, 105, 120, 135, 150, # blues
-                                         180, 210, 240, 270, 300, # purples
-                                         360, 420, 480, 540, 600 # reds --> oranges 
-                                         ])
+                        return [0, 3, 6, 9, 12, 15, # white --> greens
+                                30, 45, 60, 75, # dark greens --> blues
+                                90, 105, 120, 135, 150, # blues
+                                180, 210, 240, 270, 300, # purples
+                                360, 420, 480, 540, 600 # reds --> oranges 
+                               ]
                     case 72:
-                        return np.array([0, 3, 6, 9, 12, 15, # white --> greens
-                                         30, 45, 60, 75, # dark greens --> blues
-                                         90, 105, 120, 135, 150, # blues
-                                         180, 210, 240, 270, 300, # purples
-                                         360, 420, 480, 540, 600 # reds --> oranges 
-                                         ])
+                        return [0, 3, 6, 9, 12, 15, # white --> greens
+                                30, 45, 60, 75, # dark greens --> blues
+                                90, 105, 120, 135, 150, # blues
+                                180, 210, 240, 270, 300, # purples
+                                360, 420, 480, 540, 600 # reds --> oranges 
+                                ]
                     case 96:
-                        return np.array([0, 3, 6, 9, 12, 15, # white --> greens
-                                         30, 45, 60, 75, # dark greens --> blues
-                                         90, 105, 120, 135, 150, # blues
-                                         180, 210, 240, 270, 300, # purples
-                                         360, 420, 480, 540, 600 # reds --> oranges 
-                                         ])
+                        return [0, 3, 6, 9, 12, 15, # white --> greens
+                                30, 45, 60, 75, # dark greens --> blues
+                                90, 105, 120, 135, 150, # blues
+                                180, 210, 240, 270, 300, # purples
+                                360, 420, 480, 540, 600 # reds --> oranges 
+                                ]
                     case 120:
-                        return np.array([0, 3, 6, 9, 12, 15, # white --> greens
-                                         30, 45, 60, 75, # dark greens --> blues
-                                         90, 105, 120, 135, 150, # blues
-                                         180, 210, 240, 270, 300, # purples
-                                         360, 420, 480, 540, 600 # reds --> oranges 
-                                         ])
+                        return [0, 3, 6, 9, 12, 15, # white --> greens
+                                30, 45, 60, 75, # dark greens --> blues
+                                90, 105, 120, 135, 150, # blues
+                                180, 210, 240, 270, 300, # purples
+                                360, 420, 480, 540, 600 # reds --> oranges 
+                                ]
                     case 144:
-                        return np.array([0, 3, 6, 9, 12, 15, # white --> greens
-                                         30, 45, 60, 75, # dark greens --> blues
-                                         90, 105, 120, 135, 150, # blues
-                                         180, 210, 240, 270, 300, # purples
-                                         360, 420, 480, 540, 600 # reds --> oranges 
-                                         ])
+                        return [0, 3, 6, 9, 12, 15, # white --> greens
+                                30, 45, 60, 75, # dark greens --> blues
+                                90, 105, 120, 135, 150, # blues
+                                180, 210, 240, 270, 300, # purples
+                                360, 420, 480, 540, 600 # reds --> oranges 
+                                ]
                     case 168:
-                        return np.array([0, 3, 6, 9, 12, 15, # white --> greens
-                                         30, 45, 60, 75, # dark greens --> blues
-                                         90, 105, 120, 135, 150, # blues
-                                         180, 210, 240, 270, 300, # purples
-                                         360, 420, 480, 540, 600 # reds --> oranges 
-                                         ])
+                        return [0, 3, 6, 9, 12, 15, # white --> greens
+                                30, 45, 60, 75, # dark greens --> blues
+                                90, 105, 120, 135, 150, # blues
+                                180, 210, 240, 270, 300, # purples
+                                360, 420, 480, 540, 600 # reds --> oranges 
+                                ]
                     case _: # For example, "native" resolution
-                        return np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
-                                         2, 3, 4, 5, # dark greens --> blues
-                                         6, 7, 8, 9, 10, # blues
-                                         13, 16, 19, 22, 25, # purples
-                                         30, 35, 40, 45, 50 # reds --> oranges 
-                                         ])
+                        return [0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
+                                2, 3, 4, 5, # dark greens --> blues
+                                6, 7, 8, 9, 10, # blues
+                                13, 16, 19, 22, 25, # purples
+                                30, 35, 40, 45, 50 # reds --> oranges 
+                                ]
 
 # Plot limits to use for contour maps of percentiles for different variables
 # and for each accumulation period for precipitation.
