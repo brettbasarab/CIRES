@@ -476,55 +476,162 @@ def set_cbar_labels_rotation_and_fontsize(plot_levels, region, num_da, for_singl
 
 # Plot limits to use for contour maps for different variables
 # and for each accumulation period for precipitation.
-def variable_plot_limits(var_name, temporal_res = "native"):
+def variable_plot_limits(var_name, temporal_res = "native", linear_precip_scale = False):
     match var_name:
         case "tmp2m":
             return np.arange(-15, 45, 5) # Celsius 
         case _: # For any other variable, assume it's precipitation 
-            match temporal_res:
-                case 1:
-                    return np.arange(0, 32, 2) # mm 
-                case 3:
-                    return np.arange(0, 55, 5)
-                case 6:
-                    return np.arange(0, 65, 5)
-                case 12:
-                    return np.arange(0, 85, 5) 
-                case 24:
-                    return np.arange(0, 85, 5)
-                case 48:
-                    return np.arange(0, 125, 5)
-                case 72:
-                    return np.arange(0, 210, 10)
-                case 120:
-                    return np.arange(0, 310, 10)
-                case 168:
-                    return np.arange(0, 420, 20)
-                case _: # For example, "native" resolution
-                    return np.arange(0, 32, 2)
+            if linear_precip_scale:
+                match temporal_res:
+                    case 1:
+                        return np.arange(0, 32, 2) # mm 
+                    case 3:
+                        return np.arange(0, 55, 5)
+                    case 6:
+                        return np.arange(0, 65, 5)
+                    case 12:
+                        return np.arange(0, 85, 5) 
+                    case 24:
+                        return np.arange(0, 85, 5)
+                    case 48:
+                        return np.arange(0, 125, 5)
+                    case 72:
+                        return np.arange(0, 210, 10)
+                    case 120:
+                        return np.arange(0, 310, 10)
+                    case 168:
+                        return np.arange(0, 420, 20)
+                    case _: # For example, "native" resolution
+                        return np.arange(0, 32, 2)
+            else:
+                # TODO: Update these arrays to be non-linear
+                match temporal_res:
+                    case 1:
+                        return np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
+                                         2, 3, 4, 5, # dark greens --> blues
+                                         6, 7, 8, 9, 10, # blues
+                                         13, 16, 19, 22, 25, # purples
+                                         30, 35, 40, 45, 50 # reds --> oranges 
+                                         ])
+                    case 3:
+                        return np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
+                                         2, 4, 6, 8, # dark greens --> blues
+                                         10, 12, 14, 16, 18, # blues
+                                         22, 26, 30, 34, 38, # purples
+                                         45, 50, 55, 60, 65 # reds --> oranges 
+                                         ])
+                    case 6:
+                        return np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
+                                         2, 4, 6, 8, # dark greens --> blues
+                                         10, 12, 14, 16, 18, # blues
+                                         22, 26, 30, 34, 38, # purples
+                                         45, 50, 55, 60, 65, 70, 75 # reds --> oranges 
+                                         ])
+                    case 12:
+                        return np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
+                                         2, 4, 6, 8, # dark greens --> blues
+                                         10, 12, 14, 16, 18, # blues
+                                         22, 26, 30, 34, 38, # purples
+                                         45, 50, 55, 60, 65, 70, 75 # reds --> oranges 
+                                         ])
+                    case 24:
+                        return np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
+                                         2, 4, 6, 8, # dark greens --> blues
+                                         10, 12, 14, 16, 18, # blues
+                                         22, 26, 30, 34, 38, # purples
+                                         45, 50, 55, 60, 65, 70, 75 # reds --> oranges 
+                                         ])
+                    case 48:
+                        return np.array([0, 3, 6, 9, 12, 15, # white --> greens
+                                         30, 45, 60, 75, # dark greens --> blues
+                                         90, 105, 120, 135, 150, # blues
+                                         180, 210, 240, 270, 300, # purples
+                                         360, 420, 480, 540, 600 # reds --> oranges 
+                                         ])
+                    case 72:
+                        return np.array([0, 3, 6, 9, 12, 15, # white --> greens
+                                         30, 45, 60, 75, # dark greens --> blues
+                                         90, 105, 120, 135, 150, # blues
+                                         180, 210, 240, 270, 300, # purples
+                                         360, 420, 480, 540, 600 # reds --> oranges 
+                                         ])
+                    case 96:
+                        return np.array([0, 3, 6, 9, 12, 15, # white --> greens
+                                         30, 45, 60, 75, # dark greens --> blues
+                                         90, 105, 120, 135, 150, # blues
+                                         180, 210, 240, 270, 300, # purples
+                                         360, 420, 480, 540, 600 # reds --> oranges 
+                                         ])
+                    case 120:
+                        return np.array([0, 3, 6, 9, 12, 15, # white --> greens
+                                         30, 45, 60, 75, # dark greens --> blues
+                                         90, 105, 120, 135, 150, # blues
+                                         180, 210, 240, 270, 300, # purples
+                                         360, 420, 480, 540, 600 # reds --> oranges 
+                                         ])
+                    case 144:
+                        return np.array([0, 3, 6, 9, 12, 15, # white --> greens
+                                         30, 45, 60, 75, # dark greens --> blues
+                                         90, 105, 120, 135, 150, # blues
+                                         180, 210, 240, 270, 300, # purples
+                                         360, 420, 480, 540, 600 # reds --> oranges 
+                                         ])
+                    case 168:
+                        return np.array([0, 3, 6, 9, 12, 15, # white --> greens
+                                         30, 45, 60, 75, # dark greens --> blues
+                                         90, 105, 120, 135, 150, # blues
+                                         180, 210, 240, 270, 300, # purples
+                                         360, 420, 480, 540, 600 # reds --> oranges 
+                                         ])
+                    case _: # For example, "native" resolution
+                        return np.array([0.0, 0.2, 0.4, 0.6, 0.8, 1.0, # white --> greens
+                                         2, 3, 4, 5, # dark greens --> blues
+                                         6, 7, 8, 9, 10, # blues
+                                         13, 16, 19, 22, 25, # purples
+                                         30, 35, 40, 45, 50 # reds --> oranges 
+                                         ])
 
 # Plot limits to use for contour maps of percentiles for different variables
 # and for each accumulation period for precipitation.
 # TODO: Use different plot limits for 95th and 99th percentiles (and additional percentiles)?
-def variable_pctl_plot_limits(var_name, temporal_res = "native"):
+def variable_pctl_plot_limits(var_name, temporal_res = "native", linear_precip_scale = False):
     match var_name:
         case utils.accum_precip_var_name:
-            match temporal_res:
-                case "native":
-                    return np.arange(0, 11, 1) # mm 
-                case 1:
-                    return np.arange(0, 11, 1) 
-                case 3:
-                    return np.arange(0, 22, 2)
-                case 6:
-                    return np.arange(0, 36, 5)
-                case 12:
-                    return np.arange(0, 55, 5) 
-                case 24:
-                    return np.arange(0, 110, 10)
-                case _:
-                    print(f"No accumulated precip data set with resolution {temporal_res}") 
-                    sys.exit(1)
+            if linear_precip_scale:
+                match temporal_res:
+                    case "native":
+                        return np.arange(0, 11, 1) # mm 
+                    case 1:
+                        return np.arange(0, 11, 1) 
+                    case 3:
+                        return np.arange(0, 22, 2)
+                    case 6:
+                        return np.arange(0, 36, 5)
+                    case 12:
+                        return np.arange(0, 55, 5) 
+                    case 24:
+                        return np.arange(0, 110, 10)
+                    case _:
+                        print(f"No accumulated precip data set with resolution {temporal_res}") 
+                        sys.exit(1)
+            else:
+                # TODO: Update these arrays to be non-linear
+                match temporal_res:
+                    case "native":
+                        return np.arange(0, 11, 1) # mm 
+                    case 1:
+                        return np.arange(0, 11, 1) 
+                    case 3:
+                        return np.arange(0, 22, 2)
+                    case 6:
+                        return np.arange(0, 36, 5)
+                    case 12:
+                        return np.arange(0, 55, 5) 
+                    case 24:
+                        return np.arange(0, 110, 10)
+                    case _:
+                        print(f"No accumulated precip data set with resolution {temporal_res}") 
+                        sys.exit(1)
         case "tmp2m":
             return np.arange(280, 330, 5) # Kelvin
         case _:
