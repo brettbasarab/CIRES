@@ -1,9 +1,9 @@
 # A set of classes to process and interpolate various QPF/E datasets to a specified destination grid.
 # Classes include:
     # ReplayDataProcessor: process Replay precip data to calculate accumulated precipitation amounts 
-    # ImergDataProcesor: process IMERG precip data to calculate accumulated precipitation amounts; interpolate to Replay grid
-    # ERA5DataProcessor: process ERA5 precip data to calculate accumulated precipitation amounts; interpolate to Replay grid
-    # AorcDataProcessor: process AORC precip data to calculate accumulated precipitation amounts; interpolate to Replay grid
+    # ImergDataProcesor: process IMERG precip data to calculate accumulated precipitation amounts; interpolate to destination grid
+    # ERA5DataProcessor: process ERA5 precip data to calculate accumulated precipitation amounts; interpolate to destination grid
+    # AorcDataProcessor: process AORC precip data to calculate accumulated precipitation amounts; interpolate to destination grid
     # CONUS404DataProcessor: process CONUS404 precip data to calculate accumulated precipitation amounts; interpolate to destination grid
     # NestedReplayDataProcessor: process Nested Replay precip data to calculate accumulated precipitation amounts; interpolate to destination grid 
 
@@ -110,8 +110,6 @@ def get_dataset_native_temporal_res(data_name):
 
 # Spatially interpolate an xarray DataArray using xarray's interp_like method.
 # Interpolate <input_data_array> to the grid of <destination_data_array>.
-# The only interpolation method used currently is bilinear interpolation.
-# TODO: Add additional interpolation methods appropriate for precipitation, like conservative and patch.
 def spatially_interpolate_using_interp_like(input_data_array, destination_data_array,
                                             interp_method = "linear",
                                             correct_small_negative_values = True):
@@ -475,7 +473,7 @@ class ReplayDataProcessor(object):
 
         # Select Replay data at the native temporal resolution (3 hours) to interpolate.
         # Calculation of accmulated amounts at different temporal resolutions is handled by
-        # _calculate_replay_accum_precip_amount.
+        # _calculate_replay_accum_precip_amount (called within get_precip_data).
         replay_precip_to_interpolate = self.get_precip_data(spatial_res = "native", temporal_res = self.temporal_res).copy()
         
         # Change longitude coordinates of Replay to go from [-180, 180] to match AORC coordinates.
@@ -1973,6 +1971,8 @@ class NestedReplayDataProcessor(object):
 
         return accum_precip_data_array
 
+    # TODO: Implement ability to interpolate data to the destination grid resolution,
+    # which may not be the same as the Nested Replay native temporal resolution of 1 hour.
     def _spatially_interpolate_nested_replay_to_dest_grid(self):
         if (not self.DEST_GRID_FLAG): 
             print("No destination grid specified; not spatially interpolating")
@@ -2063,7 +2063,6 @@ class NestedReplayDataProcessor(object):
             os.system(cdo_cmd)
 
     ##### PUBLIC METHODS (NestedReplayDataProcessor) #####
-    # TODO: Implement ability to output data at the destination grid resolution.
     def write_precip_data_to_netcdf(self, temporal_res = "native", spatial_res = "native", file_cadence = "day", testing = False):
         if (spatial_res == "dest_grid") and (not self.DEST_GRID_FLAG):
             print(f"No data at {spatial_res} spatial resoluation to write to netCDF")
