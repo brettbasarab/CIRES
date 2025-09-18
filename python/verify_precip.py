@@ -32,6 +32,8 @@ def main():
                         help = "List of data names to verify; pass space-separated with the truth data name listed first; if None, all possible datasets for the given region are verified")
     parser.add_argument("--grid_cell_size", dest = "grid_cell_size", type = float, default = None, 
                         help = f"Assumed grid cell size for FSS and other calculations; default None to use AORC or global Replay grid cell size depending on args.verif_grid.")
+    parser.add_argument("--eval_radius_grid_cells", dest = "eval_radius_grid_cells", type = int, default = 2,
+                        help = "Evaluation radius (in number of grid cells) for FSS-by-threshold calculations; default 2")
     parser.add_argument("--time_period_types", dest = "time_period_types", default = ["full_period", "common_seasonal", "common_monthly"], nargs = "+", 
                         help = "Time period types over which to perform analysis; default ['full_period', 'common_seasonal', 'common_monthly']")
     parser.add_argument("--verif_grid", dest = "verif_grid", default = "Replay", choices = ["AORC", "Replay"],
@@ -155,7 +157,7 @@ def main():
             # Calculate FSS by amount threshold, using a fixed evaluation radius
             fss_dict_by_thresh = verif.calculate_fss(eval_type = "by_threshold",
                                                      grid_cell_size = grid_cell_size,
-                                                     fixed_radius = 2 * grid_cell_size, # degrees
+                                                     fixed_radius = args.eval_radius_grid_cells * grid_cell_size, # degrees
                                                      eval_threshold_list = eval_threshold_list,
                                                      is_pctl_threshold = False,
                                                      include_zeros = False,
@@ -178,7 +180,7 @@ def main():
             # Plot FSS timeseries (using amount thresholds) for each time period across evaluation period
             if args.plot_fss_timeseries:
                 print(f"Plotting FSS timeseries for eval radius {2*grid_cell_size:0.2f} deg; threshold 10mm")
-                verif.plot_fss_timeseries(2 * grid_cell_size, 10)
+                verif.plot_fss_timeseries(args.eval_radius_grid_cells * grid_cell_size, 10)
      
         # Calculate and plot fractions skill score (FSS) by radius and percentile threshold 
         if args.fss_pctl:
@@ -197,7 +199,7 @@ def main():
             # Calculate FSS by amount threshold, using a fixed evaluation radius
             fss_dict_by_thresh = verif.calculate_fss(eval_type = "by_threshold",
                                                      grid_cell_size = grid_cell_size,
-                                                     fixed_radius = 2 * grid_cell_size, # degrees
+                                                     fixed_radius = args.eval_radius_grid_cells * grid_cell_size, # degrees
                                                      eval_threshold_list = eval_threshold_list,
                                                      is_pctl_threshold = True,
                                                      include_zeros = False, # whether to include zeros in percentile calculations
@@ -231,7 +233,7 @@ def main():
             # Calculate FSS by ARI grid (using varying ARI grids thresholds) 
             fss_dict_by_ari = verif.calculate_fss(eval_type = "by_ari_grid",
                                                   grid_cell_size = grid_cell_size,
-                                                  fixed_radius = 2 * grid_cell_size, # degrees
+                                                  fixed_radius = args.eval_radius_grid_cells * grid_cell_size, # degrees
                                                   eval_ari_list = utils.default_eval_ari_list_years,
                                                   write_to_nc = args.write_to_nc)
 
