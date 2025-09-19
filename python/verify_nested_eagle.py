@@ -279,7 +279,7 @@ def plot_monthly_means(verif, plot_cmaps = True, plot_errors = True, write_to_nc
     else:
         return agg_dict_ts, {}
 
-def calculate_and_plot_fss(verif, plot = True, write_to_nc = False):
+def calculate_and_plot_fss(verif, plot = True, write_to_nc = False, by_amount_threshold_only = False):
     # FSS by amount threshold, fixed eval radius
     fss_threshold_mm_dict = verif.calculate_fss(eval_type = "by_threshold",
                                                 grid_cell_size = grid_cell_size,
@@ -289,6 +289,9 @@ def calculate_and_plot_fss(verif, plot = True, write_to_nc = False):
                                                 write_to_nc = write_to_nc)
     if plot:
         verif.plot_aggregated_fss(eval_type = "by_threshold", is_pctl_threshold = False, include_frequency_bias = True)
+
+    if by_amount_threshold_only:
+        return fss_threshold_mm_dict
     
     # FSS by percentile threshold, fixed eval radius
     fss_threshold_pctl_dict = verif.calculate_fss(eval_type = "by_threshold",
