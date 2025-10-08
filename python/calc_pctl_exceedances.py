@@ -79,12 +79,12 @@ def main():
         # Over a longer time period, if you use common_monthly or common_seasonal
         # to calculate percentiles, the percentiles represent something closer to a climatology
         # rather than percentiles specific to a particular month or season.
+        pctl_agg_dict = {}
         if args.climo_pctls:
             if (args.time_period_type == "monthly"):
-                pctl_time_period_type = "common_monthly"
+                pctl_time_period_type = "monthly"
             else:
-                pctl_time_period_type = "common_seasonal"
-
+                pctl_time_period_type = "seasonal"
             pctl_agg_dict = verif.calculate_aggregated_stats(time_period_type = pctl_time_period_type,
                                                              stat_type = "pctl",
                                                              agg_type = "time",
@@ -106,8 +106,6 @@ def main():
             data_array = utils.convert_period_end_to_period_begin(da)
             final_da_list = []
             for dtime in dtimes:
-                print(f"Dtime: {dtime}")
-
                 # Observed data
                 obs_da_sel_time_period = verif._determine_agg_data_from_time_period_type(obs_da_period_begin,
                                                                                          args.time_period_type,
@@ -118,17 +116,20 @@ def main():
                                                                                      args.time_period_type,
                                                                                      dtime)
 
-                # Percentiles are calculated across each common time period (e.g., all Junes, all JJAs)
+                # Percentiles are calculated across each month or season; useful if dtimes are days
                 if args.climo_pctls:
-                    if (pctl_time_period_type == "common_monthly"): 
+                    if (pctl_time_period_type == "monthly"): 
                         sel_string = pputils.dtime_to_month_string(dtime) 
-                        obs_pctl_sel_time_period = pctl_agg_dict[verif.truth_data_name].sel(common_month = sel_string)
-                        da_pctl_sel_time_period = pctl_agg_dict[data_name].sel(common_month = sel_string)
+                        obs_pctl_sel_time_period = pctl_agg_dict[verif.truth_data_name].sel(months = sel_string)
+                        da_pctl_sel_time_period = pctl_agg_dict[data_name].sel(months = sel_string)
                     else:
-                        sel_string = pputils.dtime_to_season_string(dtime[0]) # For seasonal, each dtime is a list of two dtimes
-                        obs_pctl_sel_time_period = pctl_agg_dict[verif.truth_data_name].sel(common_season = sel_string)
-                        da_pctl_sel_time_period = pctl_agg_dict[data_name].sel(common_season = sel_string)
-                # Percentiles are calculated for each valid time period (i.e., each dtime in dtimes)
+                        if (dtime.month == 12):
+                            sel_string = pputils.dtime_to_season_string(dtime) + str(dtime.year + 1)[-2:]
+                        else:
+                            sel_string = pputils.dtime_to_season_string(dtime) + str(dtime.year)[-2:]
+                        obs_pctl_sel_time_period = pctl_agg_dict[verif.truth_data_name].sel(seasons = sel_string)
+                        da_pctl_sel_time_period = pctl_agg_dict[data_name].sel(seasons = sel_string)
+                # Percentiles are calculated for each valid time period (i.e., each dtime in dtimes); useful if dtimes are months or seasons
                 else:
                     # Observed percentile
                     obs_pctl_sel_time_period = obs_da_sel_time_period.quantile(args.pctl/100, keep_attrs = True,
@@ -186,7 +187,7 @@ def main():
                               time_period_type = args.time_period_type,
                               stat_type = "pctl_excd_mean",
                               pctl = args.pctl, 
-                              plot_levels = np.arange(0, 85, 5),
+                              plot_levels = np.arange(0, 125, 5),
                               write_stats = False)
 
         # Contour maps of given type of exceedances masked to just those values (all other values,
@@ -195,70 +196,7 @@ def main():
             print(f"Plotting percentile exceedances")
             verif.plot_cmap_multi_panel(data_dict = excd_dict, plot_levels = np.arange(0, 62, 2))
 
-    return verif
+    return verif, excd_dict, agg_excd_dict, pctl_agg_dict
 
 if __name__ == "__main__":
-    verif = main()
-
-##### OLD/SCRATCH #####
-"""
-excd_dict[data_name] = da.where(obs_da >= obs_pctl)
-for data_name, da in excd_dict.items():
-    rmse = verif.calculate_rmse(da, excd_dict[verif.truth_data_name])
-    bias = verif.calculate_bias(da, excd_dict[verif.truth_data_name])
-    print(f"{data_name} RMSE: {rmse:0.2f}mm, Bias: {bias:0.2f}mm")
-
-for data_name, da in verif.da_dict.items():
-    da = utils.convert_period_end_to_period_begin(da, temporal_res = 24)
-    final_da_list = []
-    for m, month in enumerate(obs_pctl.months.dt.month.values):
-       obs_da_sel_time_period = obs_da_period_begin.sel(period_begin_time = da.period_begin_time.dt.month.isin([month]))
-       da_sel_time_period = da.sel(period_begin_time = da.period_begin_time.dt.month.isin([month]))
-       if (args.excd_type == "at_obs_excd"): # This DataArray's values where obs exceedances of obs_pctl occur for this time period 
-           excd_da = da_sel_time_period.where(obs_da_sel_time_period >= obs_pctl[m,:,:])
-       else: # This DataArray's own exceedances of obs_pctl for this time period
-           excd_da = da_sel_time_period.where(da_sel_time_period >= obs_pctl[m,:,:]) 
-       final_da_list.append(excd_da)
-    final_da = xr.concat(final_da_list, dim = "period_begin_time")
-    excd_dict[data_name] = utils.convert_period_begin_to_period_end(final_da)
-
-# TESTING: September example
-obs_da_september = utils.convert_period_end_to_period_begin(verif.da_dict["AORC"]).sel(period_begin_time = "2017-09")
-obs_pctl_full_period = obs_da.quantile(0.99, dim = "period_end_time")
-september_obs_pctl = obs_pctl.sel(months = "2017-09-01")
-
-# "Correct" version: mean of values of each DataArray where OBS data exceeds OBS percentile
-for data_name, da in verif.da_dict.items():
-  da = utils.convert_period_end_to_period_begin(da)
-  da_september = da.sel(period_begin_time = "2017-09")
-  da_excd_full_period = da_september.where(obs_da_september >= obs_pctl_full_period)
-  da_excd_september = da_september.where(obs_da_september >= september_obs_pctl)
-  print(f"***** {data_name}")
-  print(da_excd_full_period.mean().item())
-  print(da_excd_september.mean().item())
-
-# "Incorrect" but interesting version: mean of values of each DataArray where THAT DataArray exceeds OBS percentile
-# This approach could account for spatial displacement issues: Don't worry about exceedances being in the right place
-# which the previous approach demands (WHERE the obs exceedances occur). Rather, wherever there are exceedances of observed
-# pctls for this dataset, how do they compare (in a quantitative but aggregated sense) to observed pctl exceedances? 
-for data_name, da in verif.da_dict.items():
-  da = utils.convert_period_end_to_period_begin(da)
-  da_september = da.sel(period_begin_time = "2017-09")
-  da_excd_full_period = da_september.where(da_september >= obs_pctl_full_period)
-  da_excd_september = da_september.where(da_september >= september_obs_pctl)
-  print(f"***** {data_name}")
-  print(da_excd_full_period.mean().item())
-  print(da_excd_september.mean().item())
-
-# Code to exclude zeros from percentile calculations
-parser.add_argument("--exclude_zeros", dest = "exclude_zeros", action = "store_true", default = False,
-                    help = "Set to exclude zeros from percentile calculations; default False")
-if args.exclude_zeros:
-    obs_da_for_pctls = obs_da_sel_time_period.where(obs_da_sel_time_period > 0.0)
-    model_da_for_pctls = da_sel_time_period.where(da_sel_time_period > 0.0)
-    exclude_zeros_str = ".exclude_zeros"
-else:
-    obs_da_for_pctls = obs_da_sel_time_period
-    model_da_for_pctls = da_sel_time_period
-    exclude_zeros_str = ""
-"""
+    verif, excd_dict, agg_excd_dict, pctl_agg_dict = main()
