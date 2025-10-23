@@ -1541,11 +1541,12 @@ class PrecipVerificationProcessor(object):
                 xaxis_var = np.arange(self.threshold_da_for_occ_stats.shape[0])
                 xticks = self.threshold_da_for_occ_stats
                 axis.set_xticks(xaxis_var, xticks)
+                axis.set_xlim(xaxis_var[0], xaxis_var[-1])
             else:
                 xaxis_var = self.threshold_da_for_occ_stats 
                 xticks = np.arange(0, xaxis_var[-1] + 10, 10)
                 axis.set_xticks(xticks)
-            axis.set_xlim(xaxis_var[0], xaxis_var[-1])
+                axis.set_xlim(0, xaxis_var[-1])
             if (which_stat != "frequency_bias"):
                 axis.set_ylim(0, 1.0)
                 axis.set_yticks(np.arange(0, 1.1, 0.1)) 
@@ -1560,9 +1561,9 @@ class PrecipVerificationProcessor(object):
             plt.title(f"{which_stat} vs. threshold, {self.region} {short_name}: {dt_str}", size = 15)
             plt.xlabel("Threshold (mm)", size = 15)
             if (which_stat == "frequency_bias"):
-                plt.ylabel(f"Frequency Bias", size = 15) 
+                plt.ylabel("Frequency Bias", size = 15) 
             else:
-                plt.ylabel(f"{which_stat}", size = 15) 
+                plt.ylabel(which_stat, size = 15) 
 
             # Plot data
             if (which_stat == "frequency_bias"): # For frequency bias, add a line at bias = 1 (unbiased forecast)
