@@ -49,6 +49,8 @@ def main():
                         help = "Calculate fractions skill score (FSS) using percentile thresholds")
     parser.add_argument("--fss_ari", dest = "fss_ari", action = "store_true", default = False,
                         help = "Calculate fractions skill score (FSS) using ARI grid thresholds")
+    parser.add_argument("--occ_stats", dest = "occ_stats", action = "store_true", default = False,
+                        help = "Calculate occurrence statistics (CSI, ETS, etc.)")
     parser.add_argument("--pdfs", dest = "pdfs", action = "store_true", default = False,
                         help = "Calculate probability density functions (PDFs) of precip") 
     parser.add_argument("--timeseries", dest = "timeseries", action = "store_true", default = False,
@@ -247,6 +249,18 @@ def main():
 
                     verif.plot_aggregated_fss(eval_type = "by_ari_grid", xaxis_explicit_values = True,
                                               time_period_type = time_period_type)
+       
+    
+        # Calculate and plot occurrence stats (CSI, etc.)
+        if args.occ_stats:
+            for time_period_type in args.time_period_types:
+                print(f"**** Calculating {time_period_type} occurrence statistics") 
+                occ_stats_dict = verif.calculate_aggregated_occ_stats(time_period_type = time_period_type)
+                if args.plot:
+                    verif.plot_aggregated_occ_stats_by_threshold(occ_stats_dict, which_stat = "CSI", time_period_type = time_period_type) 
+                    verif.plot_aggregated_occ_stats_by_threshold(occ_stats_dict, which_stat = "ETS", time_period_type = time_period_type) 
+                    verif.plot_aggregated_occ_stats_by_threshold(occ_stats_dict, which_stat = "frequency_bias", time_period_type = time_period_type) 
+
         # Plot PDFs and CDFs
         if args.pdfs:
             for time_period_type in args.time_period_types:

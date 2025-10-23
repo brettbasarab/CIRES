@@ -522,9 +522,8 @@ class PrecipVerificationProcessor(object):
         if (input_da_dict is None):
             input_da_dict = self.da_dict
 
-        threshold_da = xr.DataArray(threshold_list)
-        pdp.add_attributes_to_data_array(threshold_da, units = "mm")
-        data_coords = threshold_da 
+        self.threshold_da_for_occ_stats = xr.DataArray(threshold_list)
+        pdp.add_attributes_to_data_array(self.threshold_da_for_occ_stats, units = "mm")
  
         occ_stats_dict = {}
         obs_precip = input_da_dict[self.truth_data_name]
@@ -587,17 +586,17 @@ class PrecipVerificationProcessor(object):
                     ETS = np.nan
                 ETS_list.append(ETS)
     
-            hits_da = self._convert_occ_stats_np_array_to_data_array(np.array(hits_list), data_coords, "hits")
-            misses_da = self._convert_occ_stats_np_array_to_data_array(np.array(misses_list), data_coords, "misses")   
-            false_alarms_da = self._convert_occ_stats_np_array_to_data_array(np.array(false_alarms_list), data_coords, "false_alarms")
-            correct_negatives_da = self._convert_occ_stats_np_array_to_data_array(np.array(correct_negatives_list), data_coords, "correct_negatives")
-            total_events_da = self._convert_occ_stats_np_array_to_data_array(np.array(total_events_list), data_coords, "total_events")
-            frequency_bias_da = self._convert_occ_stats_np_array_to_data_array(np.array(frequency_bias_list), data_coords, "frequency_bias")
-            CSI_da = self._convert_occ_stats_np_array_to_data_array(np.array(CSI_list), data_coords, "CSI")
-            ETS_da = self._convert_occ_stats_np_array_to_data_array(np.array(ETS_list), data_coords, "ETS")
+            hits_da = self._convert_occ_stats_np_array_to_data_array(np.array(hits_list), self.threshold_da_for_occ_stats, "hits")
+            misses_da = self._convert_occ_stats_np_array_to_data_array(np.array(misses_list), self.threshold_da_for_occ_stats, "misses")   
+            false_alarms_da = self._convert_occ_stats_np_array_to_data_array(np.array(false_alarms_list), self.threshold_da_for_occ_stats, "false_alarms")
+            correct_negatives_da = self._convert_occ_stats_np_array_to_data_array(np.array(correct_negatives_list), self.threshold_da_for_occ_stats, "correct_negatives")
+            total_events_da = self._convert_occ_stats_np_array_to_data_array(np.array(total_events_list), self.threshold_da_for_occ_stats, "total_events")
+            frequency_bias_da = self._convert_occ_stats_np_array_to_data_array(np.array(frequency_bias_list), self.threshold_da_for_occ_stats, "frequency_bias")
+            CSI_da = self._convert_occ_stats_np_array_to_data_array(np.array(CSI_list), self.threshold_da_for_occ_stats, "CSI")
+            ETS_da = self._convert_occ_stats_np_array_to_data_array(np.array(ETS_list), self.threshold_da_for_occ_stats, "ETS")
 
             occ_stats_dict[data_name] = StatsDataClass(
-                                                       threshold = threshold_da,
+                                                       threshold = self.threshold_da_for_occ_stats, 
                                                        hits = hits_da,
                                                        misses = misses_da,
                                                        false_alarms = false_alarms_da,
@@ -1154,7 +1153,7 @@ class PrecipVerificationProcessor(object):
         return fss_agg_dict, afss_agg_dict, fss_uniform_agg_dict 
 
     # Calculated occurence statistics aggregated over specified time periods (common monthly, common seasonal, etc.)
-    def calculate_aggregated_occ_stats(self, which_stat, time_period_type = "full_period"):
+    def calculate_aggregated_occ_stats(self, which_stat = "all", time_period_type = "full_period"):
         # Process time_period_type: list of date times, dimension name, etc.
         dtimes, dim_name, time_period_str = self._process_time_period_type_to_dtimes(time_period_type)
 
@@ -1172,8 +1171,11 @@ class PrecipVerificationProcessor(object):
                 da_dict_each_dtime[data_name] = self._determine_agg_data_from_time_period_type(data_array, time_period_type, dtime)
                 
             all_occ_stats_dict = self.calculate_occ_stats(da_dict_each_dtime)
-            stat_dict = self.extract_occ_stat(all_occ_stats_dict, which_stat)
-            occ_stats_agg_dict[dtime] = stat_dict 
+            if (which_stat == "all"):
+                occ_stats_agg_dict[dtime] = all_occ_stats_dict 
+            else:
+                stat_dict = self.extract_occ_stat(all_occ_stats_dict, which_stat)
+                occ_stats_agg_dict[dtime] = stat_dict 
 
         return occ_stats_agg_dict 
     ##### END Public methods stats calculations #####
@@ -1507,6 +1509,79 @@ class PrecipVerificationProcessor(object):
     ##### END Private methods to support stats calculations #####
 
     ##### Public methods plotting #####
+    def plot_aggregated_occ_stats_by_threshold(self, occ_stats_dict, which_stat = "CSI", time_period_type = "full_period",
+                                               xaxis_explicit_values = False):
+        # Based on this particular dataset, get a list of all the valid datetimes we're going to plot
+        dtimes = sorted(list(occ_stats_dict.keys()))
+
+        # Loop through dtimes, creating a plot for each one 
+        for dtime in dtimes: 
+            if (type(dtime) is pd.Timestamp) or (type(dtime) is dt.datetime):
+                dt_str = dtime.strftime("%Y%m") 
+            elif (type(dtime) is str):
+                dt_str = dtime
+            else:
+                dt_str = dtime.strftime("%Y%m")
+
+            if (dt_str in pputils.construct_monthly_string_list()):
+                time_period_number = pputils.month_string_to_month_number(dt_str)
+                dt_str_ext = f"{time_period_number:02d}{dt_str}.{self.monthly_time_period_str}"
+            elif (dt_str in pputils.construct_seasonal_string_list()): 
+                time_period_number = pputils.season_string_to_season_number(dt_str)
+                dt_str_ext = f"{time_period_number:02d}{dt_str}.{self.monthly_time_period_str}"
+            else:
+                dt_str_ext = dt_str
+
+            # Create figure
+            fig = plt.figure(figsize = (13, 10))
+            axis = plt.gca() 
+            
+            # Set axes limits and ticks
+            if xaxis_explicit_values: # Plot explicitly against the selected eval radii or thresholds, with each value evenly spaced on x-axis
+                xaxis_var = np.arange(self.threshold_da_for_occ_stats.shape[0])
+                xticks = self.threshold_da_for_occ_stats
+                axis.set_xticks(xaxis_var, xticks)
+            else:
+                xaxis_var = self.threshold_da_for_occ_stats 
+                xticks = np.arange(0, xaxis_var[-1] + 10, 10)
+                axis.set_xticks(xticks)
+            axis.set_xlim(xaxis_var[0], xaxis_var[-1])
+            if (which_stat != "frequency_bias"):
+                axis.set_ylim(0, 1.0)
+                axis.set_yticks(np.arange(0, 1.1, 0.1)) 
+            else:
+                axis.set_ylim(0, 2.0)
+                axis.set_yticks(np.arange(0, 2.2, 0.2)) 
+            axis.tick_params(axis = "both", labelsize = 15)
+            axis.grid(True, linewidth = 1.5)
+
+            # Add title and axes labels 
+            short_name = pdp.format_short_name(self.da_dict[self.truth_data_name])
+            plt.title(f"{which_stat} vs. threshold, {self.region} {short_name}: {dt_str}", size = 15)
+            plt.xlabel("Threshold (mm)", size = 15)
+            if (which_stat == "frequency_bias"):
+                plt.ylabel(f"Frequency Bias", size = 15) 
+            else:
+                plt.ylabel(f"{which_stat}", size = 15) 
+
+            # Plot data
+            if (which_stat == "frequency_bias"): # For frequency bias, add a line at bias = 1 (unbiased forecast)
+                axis.plot([0, xaxis_var[-1]], [1, 1], linewidth = 3, color = "black") 
+            single_occ_stat_dict = self.extract_occ_stat(occ_stats_dict[dtime], which_stat)
+            for data_name, da in single_occ_stat_dict.items():
+                if (data_name == self.truth_data_name):
+                    continue
+                axis.plot(xaxis_var, da, linewidth = 2.5, label = data_name,
+                         color = pputils.time_series_color_dict[data_name])
+            axis.legend(loc = "best", prop = {"size": 15})
+
+            # Save figure 
+            fig.tight_layout()
+            fig_name = f"{which_stat}_threshold_mm.{self.data_names_str}{time_period_type}.{short_name}.{dt_str_ext}.{self.region}.png"
+            fig_path = os.path.join(self.plot_output_dir, fig_name)
+            print(f"Saving {fig_path}")
+            plt.savefig(fig_path)
+
     def how_to_plot_aggregated_fss(self):
         print(f'plot_aggregated_fss(eval_type = [{evaluate_by_radius_kw_str}, {evaluate_by_threshold_kw_str},\n'
               f'                     {evaluate_by_radius_ari_threshold_kw_str}, {evaluate_by_ari_kw_str}],\n'
@@ -1525,7 +1600,7 @@ class PrecipVerificationProcessor(object):
 
         # Frequency bias data to plot (done for plotting against thresholds, only)
         if include_frequency_bias:
-            frequency_bias_dict = self.calculate_aggregated_occ_stats("frequency_bias", time_period_type = time_period_type)
+            frequency_bias_dict = self.calculate_aggregated_occ_stats(which_stat = "frequency_bias", time_period_type = time_period_type)
         
         # Based on this particular dataset, get a list of all the valid datetimes we're going to plot
         dtimes = sorted(list(fss_agg_dict.keys()))
