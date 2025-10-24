@@ -609,7 +609,7 @@ class PrecipVerificationProcessor(object):
 
         return occ_stats_dict 
 
-    def extract_occ_stat(self, occ_stats_dict, which_stat):
+    def extract_occ_stat_dict(self, occ_stats_dict, which_stat):
         stat_dict = {}
         for data_name, stats_data in occ_stats_dict.items():
             match which_stat:
@@ -634,6 +634,28 @@ class PrecipVerificationProcessor(object):
                     return
 
         return stat_dict
+
+    def extract_occ_stat_data_array(self, occ_stats_dict, which_stat, data_name):
+        match which_stat:
+            case "hits":
+                return occ_stats_dict[data_name].hits 
+            case "misses":
+                return occ_stats_dict[data_name].misses 
+            case "false_alarms":
+                return occ_stats_dict[data_name].false_alarms 
+            case "correct_negatives":
+                return occ_stats_dict[data_name].correct_negatives 
+            case "total_events":
+                return occ_stats_dict[data_name].total_events 
+            case "frequency_bias":
+                return occ_stats_dict[data_name].frequency_bias 
+            case "CSI":
+                return occ_stats_dict[data_name].CSI 
+            case "ETS":
+                return occ_stats_dict[data_name].ETS 
+            case _:
+                print(f"Error: Unrecognized occurence stat type {which_stat}")
+                return
 
     # Calculate correlation coefficient
     def calculate_pearsonr(self, model_precip, obs_precip):
@@ -1153,7 +1175,7 @@ class PrecipVerificationProcessor(object):
         return fss_agg_dict, afss_agg_dict, fss_uniform_agg_dict 
 
     # Calculated occurence statistics aggregated over specified time periods (common monthly, common seasonal, etc.)
-    def calculate_aggregated_occ_stats(self, which_stat = "all", time_period_type = "full_period"):
+    def calculate_aggregated_occ_stats(self, which_stat = "all", time_period_type = "full_period", write_to_nc = False):
         # Process time_period_type: list of date times, dimension name, etc.
         dtimes, dim_name, time_period_str = self._process_time_period_type_to_dtimes(time_period_type)
 
@@ -1174,8 +1196,37 @@ class PrecipVerificationProcessor(object):
             if (which_stat == "all"):
                 occ_stats_agg_dict[dtime] = all_occ_stats_dict 
             else:
-                stat_dict = self.extract_occ_stat(all_occ_stats_dict, which_stat)
+                stat_dict = self.extract_occ_stat_dict(all_occ_stats_dict, which_stat)
                 occ_stats_agg_dict[dtime] = stat_dict 
+
+        # Output to netCDF
+        if write_to_nc:
+            for data_name in self.data_names_list:
+                if (which_stat == "all"):
+                    out_da_dict = {"hits": [], "misses": [], "false_alarms": [], "correct_negatives": [],
+                                   "total_events": [], "CSI": [], "ETS": [], "frequency_bias": []}
+                else:
+                    out_da_dict = {which_stat: []}
+
+                for dtime in dtimes:
+                    for stat_name, da_list in out_da_dict.items():
+                        out_da_dict[stat_name].append(extract_occ_stat_data_array(occ_stats_agg_dict[dtime], which_stat, data_name))
+
+                for stat_name, da_list in out_da_dict.items():
+                    out_da = xr.concat(da_list, dim = dim_name)
+                    if (time_period_type == "seasonal"):
+                        out_da.coords[dim_name] = self._construct_seasonal_dt_str_list(dtimes) 
+                    else:
+                        out_da.coords[dim_name] = dtimes 
+                    out_da_dict[stat_name] = out_da 
+
+                out_ds = xr.Dataset(out_da_dict)
+                nc_out_fpath = self._configure_output_stats_nc_fpath(data_name,
+                                                                     time_period_str,
+                                                                     time_period_type = time_period_type,
+                                                                     stat_type = "CSI")
+                print(f"Writing {nc_out_fpath}")
+                out_ds.to_netcdf(nc_out_fpath)
 
         return occ_stats_agg_dict 
     ##### END Public methods stats calculations #####
@@ -1568,7 +1619,7 @@ class PrecipVerificationProcessor(object):
             # Plot data
             if (which_stat == "frequency_bias"): # For frequency bias, add a line at bias = 1 (unbiased forecast)
                 axis.plot([0, xaxis_var[-1]], [1, 1], linewidth = 3, color = "black") 
-            single_occ_stat_dict = self.extract_occ_stat(occ_stats_dict[dtime], which_stat)
+            single_occ_stat_dict = self.extract_occ_stat_dict(occ_stats_dict[dtime], which_stat)
             for data_name, da in single_occ_stat_dict.items():
                 if (data_name == self.truth_data_name):
                     continue
