@@ -1201,16 +1201,24 @@ class PrecipVerificationProcessor(object):
 
         # Output to netCDF
         if write_to_nc:
-            for data_name in self.data_names_list:
+            for data_name in self.data_names:
+                if (data_name == self.truth_data_name):
+                    continue
+
                 if (which_stat == "all"):
                     out_da_dict = {"hits": [], "misses": [], "false_alarms": [], "correct_negatives": [],
                                    "total_events": [], "CSI": [], "ETS": [], "frequency_bias": []}
+                    stat_type = "occ_stats"
                 else:
                     out_da_dict = {which_stat: []}
+                    stat_type = which_stat 
 
                 for dtime in dtimes:
                     for stat_name, da_list in out_da_dict.items():
-                        out_da_dict[stat_name].append(extract_occ_stat_data_array(occ_stats_agg_dict[dtime], which_stat, data_name))
+                        if (which_stat == "all"):
+                            out_da_dict[stat_name].append(self.extract_occ_stat_data_array(occ_stats_agg_dict[dtime], stat_name, data_name))
+                        else:
+                            out_da_dict[stat_name].append(occ_stats_agg_dict[dtime][data_name])
 
                 for stat_name, da_list in out_da_dict.items():
                     out_da = xr.concat(da_list, dim = dim_name)
@@ -1224,11 +1232,11 @@ class PrecipVerificationProcessor(object):
                 nc_out_fpath = self._configure_output_stats_nc_fpath(data_name,
                                                                      time_period_str,
                                                                      time_period_type = time_period_type,
-                                                                     stat_type = "CSI")
+                                                                     stat_type = stat_type)
                 print(f"Writing {nc_out_fpath}")
                 out_ds.to_netcdf(nc_out_fpath)
 
-        return occ_stats_agg_dict 
+        return occ_stats_agg_dict
     ##### END Public methods stats calculations #####
 
     ##### Private methods to support stats calculations #####

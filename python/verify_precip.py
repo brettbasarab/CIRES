@@ -249,13 +249,12 @@ def main():
 
                     verif.plot_aggregated_fss(eval_type = "by_ari_grid", xaxis_explicit_values = True,
                                               time_period_type = time_period_type)
-       
     
         # Calculate and plot occurrence stats (CSI, etc.)
         if args.occ_stats:
             for time_period_type in args.time_period_types:
                 print(f"**** Calculating {time_period_type} occurrence statistics") 
-                occ_stats_dict = verif.calculate_aggregated_occ_stats(time_period_type = time_period_type)
+                occ_stats_dict = verif.calculate_aggregated_occ_stats(which_stat = "all", time_period_type = time_period_type, write_to_nc = args.write_to_nc)
                 if args.plot:
                     verif.plot_aggregated_occ_stats_by_threshold(occ_stats_dict, which_stat = "CSI", time_period_type = time_period_type) 
                     verif.plot_aggregated_occ_stats_by_threshold(occ_stats_dict, which_stat = "ETS", time_period_type = time_period_type) 
