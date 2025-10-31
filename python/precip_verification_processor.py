@@ -161,8 +161,6 @@ class PrecipVerificationProcessor(object):
         if not(self.USE_EXTERNAL_DA_DICT):
             # Read model and obs data, check that the data array shapes match, then load the data
             self._read_region_subset_and_load_data()
-            self._sum_data_over_full_time_period()
-            self.truth_da_summed_time = self.da_dict_summed_time[self.truth_data_name]
         else:
             print("**** USE_EXTERNAL_DA_DICT set; will perform any verification using external data arrays provided")
             if (external_da_dict is None):
@@ -308,7 +306,8 @@ class PrecipVerificationProcessor(object):
                 current_dt += dt.timedelta(hours = self.temporal_res)
                 self.valid_dt_list.append(current_dt)
         else:
-            raise NotImplementedError
+            print(f"Verification for {self.temporal_res} temporal resolution not yet implemented")
+            sys.exit(0) 
         self.time_period_str = f"{self.valid_dt_list[0]:%Y%m%d.%H}-{self.valid_dt_list[-1]:%Y%m%d.%H}"
         self.num_valid_times = len(self.valid_dt_list)
 
@@ -486,31 +485,6 @@ class PrecipVerificationProcessor(object):
 
         print(f"{data_name} data array shape, subsetted to region: {region_subset_data_array.shape}")
         return region_subset_data_array 
-
-    def _sum_data_over_full_time_period(self):
-        print("Calculating data summed over full time period")
-        self.da_dict_summed_time = {} 
-        for data_name, da in self.da_dict.items():
-            # Keep time dimension in summmed data array so we are able to operate on this
-            # dimension in various plotting method and related helper methods.
-            # Also set min_count to the shape of the DataArray's time dimension, which requires
-            # that ALL data along this dimension be non-NaN to take the sum; otherwise, NaN is returned
-            da_summed_time = da.sum(dim = utils.period_end_time_dim_str,
-                                    keepdims = True,
-                                    skipna = True,
-                                    min_count = da.coords[utils.period_end_time_dim_str].shape[0])
-            end_dt = pd.Timestamp(da[utils.period_end_time_dim_str].values[-1])
-            da_summed_time.coords[utils.period_end_time_dim_str] = [end_dt]
- 
-            # Set attributes properly
-            num_time_intervals = da[utils.period_end_time_dim_str].shape[0]
-            total_time_period_hours = num_time_intervals * self.temporal_res
-            pdp.add_attributes_to_data_array(da_summed_time,
-                                               short_name = f"{total_time_period_hours}-hour precipitation", 
-                                               long_name = f"Precipitation accumulated over the prior {total_time_period_hours} hour(s)",
-                                               units = da.units,
-                                               interval_hours = total_time_period_hours) 
-            self.da_dict_summed_time[data_name] = da_summed_time 
 
     ##### PUBLIC METHODS #####
     ############################################################################
@@ -1237,6 +1211,31 @@ class PrecipVerificationProcessor(object):
                 out_ds.to_netcdf(nc_out_fpath)
 
         return occ_stats_agg_dict
+    
+    def sum_data_over_full_time_period(self):
+        print("Calculating data summed over full time period")
+        self.da_dict_summed_time = {} 
+        for data_name, da in self.da_dict.items():
+            # Keep time dimension in summmed data array so we are able to operate on this
+            # dimension in various plotting method and related helper methods.
+            # Also set min_count to the shape of the DataArray's time dimension, which requires
+            # that ALL data along this dimension be non-NaN to take the sum; otherwise, NaN is returned
+            da_summed_time = da.sum(dim = utils.period_end_time_dim_str,
+                                    keepdims = True,
+                                    skipna = True,
+                                    min_count = da.coords[utils.period_end_time_dim_str].shape[0])
+            end_dt = pd.Timestamp(da[utils.period_end_time_dim_str].values[-1])
+            da_summed_time.coords[utils.period_end_time_dim_str] = [end_dt]
+ 
+            # Set attributes properly
+            num_time_intervals = da[utils.period_end_time_dim_str].shape[0]
+            total_time_period_hours = num_time_intervals * self.temporal_res
+            pdp.add_attributes_to_data_array(da_summed_time,
+                                               short_name = f"{total_time_period_hours}-hour precipitation", 
+                                               long_name = f"Precipitation accumulated over the prior {total_time_period_hours} hour(s)",
+                                               units = da.units,
+                                               interval_hours = total_time_period_hours) 
+            self.da_dict_summed_time[data_name] = da_summed_time 
     ##### END Public methods stats calculations #####
 
     ##### Private methods to support stats calculations #####
@@ -2290,6 +2289,8 @@ class PrecipVerificationProcessor(object):
             truth_da = self.truth_da
 
         if summed_over_time_period: 
+            self.sum_data_over_full_time_period()
+            self.truth_da_summed_time = self.da_dict_summed_time[self.truth_data_name]
             data_dict = self.da_dict_summed_time
             truth_da = self.truth_da_summed_time
         
