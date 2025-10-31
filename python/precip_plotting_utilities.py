@@ -241,6 +241,11 @@ regions_info_dict = \
                 ),
     }
 
+# Return dot-seperated string of data names from the keys of a dictionary
+# of the form {data_name1: da1, data_name2: da2,...., data_nameN: daN}
+def get_data_names_str(data_dict):
+    return "".join(f"{key}." for key in data_dict.keys())
+
 # Map three-letter month strings to the correponding numerical month of the year.
 def month_string_to_month_number(month_string):
     month_to_number_dict = {
@@ -998,7 +1003,7 @@ def plot_cmap_multi_panel(data_dict, truth_data_name, region, plot_levels = np.a
     truth_da = data_dict[truth_data_name]
     num_da = len(data_dict.items())
     figsize = set_figsize_based_on_num_da(num_da, region, single_colorbar = single_colorbar)
-    data_names_str = "".join(f"{key}." for key in data_dict.keys())
+    data_names_str = get_data_names_str(data_dict) 
 
     # single_colorbar refers to having a single color bar for multiple subplots, so not relevant for single-panel plot
     if (num_da == 1):
