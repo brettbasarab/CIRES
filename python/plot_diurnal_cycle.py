@@ -7,6 +7,7 @@ import numpy as np
 import os
 import precip_data_processors as pdp
 import precip_plotting_utilities as ppu
+import precip_verification_processor as pvp
 import utilities as utils
 import xarray as xr
 
@@ -22,49 +23,42 @@ def main():
                         help = "For plotting only: region to zoom plots to (default US-Central)")
     args = parser.parse_args()
 
-    # Read data
-    proc_aorc = pdp.AorcDataProcessor(args.start_dt_str,
-                                      args.end_dt_str,
-                                      region = args.region) 
-
-    proc_conus404 = pdp.CONUS404DataProcessor(args.start_dt_str,
-                                              args.end_dt_str,
-                                              region = args.region)
-
-    proc_nr = pdp.NestedReplayDataProcessor(args.start_dt_str,
+    verif = pvp.PrecipVerificationProcessor(args.start_dt_str, 
                                             args.end_dt_str,
-                                            region = args.region)
+                                            data_names = ["AORC", "CONUS404", "NestedReplay"], 
+                                            truth_data_name = "AORC", 
+                                            data_grid = "AORC",
+                                            region = args.region,
+                                            temporal_res = 1)
 
-    # Get hourly precip data
-    aorc_precip_hourly = proc_aorc.get_precip_data(load = True) 
-    conus404_precip_hourly = proc_conus404.get_precip_data(load = True) 
-    nr_precip_hourly = proc_nr.get_precip_data(load = True)
+    utc_hour_list = np.arange(0, 24)
+    local_hour_list = [convert_utc_hour_to_local_hour(ihr, 5) for ihr in utc_hour_list]
 
     # Organize into nested dictionary of the form data_name[local_hour][precip_for_that_local_hour]
-    aorc_diurnal = {}
-    conus404_diurnal = {}
-    nr_diurnal = {}
-    utc_hour_list = np.arange(0, 24)
-    local_hour_list = [convert_utc_hour_to_local_hour(ihr, 5) for ihr in utc_hour_list] 
-    for ihr in utc_hour_list:
-        aorc_precip = aorc_precip_hourly.sel(period_end_time = aorc_precip_hourly.period_end_time.dt.hour.isin( [ihr] ))
-        conus404_precip = conus404_precip_hourly.sel(period_end_time = conus404_precip_hourly.period_end_time.dt.hour.isin( [ihr] ))
-        nr_precip = nr_precip_hourly.sel(period_end_time = nr_precip_hourly.period_end_time.dt.hour.isin( [ihr] ))
+    diurnal_precip_dict = {}
+    for data_name, da in verif.da_dict.items():
+        for ihr in utc_hour_list:
+            ihr_precip = da.sel(period_end_time = da.period_end_time.dt.hour.isin( [ihr] ))
 
-        if args.exclude_zeros:
-            aorc_diurnal[local_hour_list[ihr]] = aorc_precip.where(aorc_precip > 0.0).mean().item()
-            conus404_diurnal[local_hour_list[ihr]] = conus404_precip.where(conus404_precip > 0.0).mean().item()
-            nr_diurnal[local_hour_list[ihr]] = nr_precip.where(nr_precip > 0.0).mean().item()
-        else:
-            aorc_diurnal[local_hour_list[ihr]] = aorc_precip.mean().item()
-            conus404_diurnal[local_hour_list[ihr]] = conus404_precip.mean().item()
-            nr_diurnal[local_hour_list[ihr]] = nr_precip.mean().item()
-
-    diurnal_precip_dict = {"AORC": aorc_diurnal, "CONUS404": conus404_diurnal, "NestedReplay": nr_diurnal}
-
+            if args.exclude_zeros:
+                ihr_mean = ihr_precip.where(ihr_precip > 0.0).mean().item()
+            else:
+                ihr_mean = ihr_precip.mean().item()
+   
+            if (ihr == 0): # First instance, initialize dictionary
+                diurnal_precip_dict[data_name] = {local_hour_list[ihr]: ihr_mean} 
+            else:
+                diurnal_precip_dict[data_name][ local_hour_list[ihr] ] = ihr_mean
+    
     # Plot
+    if args.exclude_zeros:
+        ylims = [0.0, 2.4]
+        ystep = 0.2
+    else:
+        ylims = [0.0, 0.24]
+        ystep = 0.02
     plot_diurnal_cycle(diurnal_precip_dict, args.start_dt_str, args.end_dt_str, args.region,
-                       exclude_zeros = args.exclude_zeros)
+                       ylims = ylims, ystep = ystep, exclude_zeros = args.exclude_zeros)
 
     return diurnal_precip_dict 
 
@@ -74,9 +68,9 @@ def convert_utc_hour_to_local_hour(utc_hour, tz_offset):
     return utc_hour - tz_offset
 
 def plot_diurnal_cycle(diurnal_precip_dict, start_dt_str, end_dt_str, region,
-                       ylims = [0.0, 0.2], ystep = 0.02, exclude_zeros = False):
+                   ylims = [0.0, 0.24], ystep = 0.02, exclude_zeros = False):
     # Create figure
-    plt.figure(figsize = (12,10))
+    plt.figure(figsize = (15, 10))
     axis = plt.gca()
     plt.title(f"Diurnal cycle hourly mean precip; {start_dt_str}-{end_dt_str}; {region}", size = 15)
 
